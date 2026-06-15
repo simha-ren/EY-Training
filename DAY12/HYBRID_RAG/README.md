@@ -2,12 +2,8 @@
 
 This Colab notebook demonstrates the construction, evaluation, and optimization of a Retrieval-Augmented Generation (RAG) pipeline. It compares a RAG approach with a full-context baseline using a HuggingFace `distilgpt2` model for generation and Azure AI Search for retrieval. Key aspects include hybrid retrieval quality, latency profiling, and extensions like confidence filtering and simulated streaming.
 
-## Architecture
-
 ## Architecture Diagram
 
-```mermaid
-graph TD
     A[User/Application] --> B{Query}
 
     %% Embedding Step
@@ -34,36 +30,6 @@ graph TD
     J --> K[Simulated Streaming Output];
 
     K --> L[Display Answer to User];
-
-    %% Key Components and Notes
-    subgraph Key Components
-        C -- model_name: all-MiniLM-L6-v2 --> C;
-        E -- Index: simha-rag --> E;
-        F -- In-memory vector store --> F;
-        I -- causal LM --> I;
-    end
-
-    subgraph Pipeline Flow
-        A -- Input Query --> B;
-        B -- Process --> C;
-        C -- Embed Query --> D;
-        D -- Retrieve Context --> G;
-        G -- Filter Context --> H;
-        H -- Generate Response --> I;
-        I -- Stream Output --> K;
-        K -- User Experience --> L;
-    end
-
-    style A fill:#D4EDDA,stroke:#28A745,stroke-width:2px
-    style L fill:#D4EDDA,stroke:#28A745,stroke-width:2px
-    style C fill:#E0F7FA,stroke:#00BCD4,stroke-width:1px
-    style E fill:#E0F7FA,stroke:#00BCD4,stroke-width:1px
-    style F fill:#E0F7FA,stroke:#00BCD4,stroke-width:1px
-    style I fill:#FFF3E0,stroke:#FF9800,stroke-width:1px
-    style H fill:#FFECB3,stroke:#FFC107,stroke-width:1px
-    style K fill:#FFE0B2,stroke:#FF9800,stroke-width:1px,stroke-dasharray: 5 5
-
-```
 
 
 ## Table of Contents
