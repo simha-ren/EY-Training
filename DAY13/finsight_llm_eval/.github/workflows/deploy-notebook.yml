@@ -1,0 +1,167 @@
+# FinSight AI — LLM Eval Pipeline (Lab 3)
+# Triggers on every PR to main modifying day13/colab3 files; also runs nightly.
+
+name: LLM Eval Pipeline
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'day13/colab3/src/**'
+      - 'day13/colab3/tests/**'
+      - '.github/workflows/llm-eval.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'day13/colab3/src/**'
+      - 'day13/colab3/tests/**'
+      - '.github/workflows/llm-eval.yml'
+  schedule:
+    - cron: '0 2 * * *'   # Nightly full eval at 02:00 UTC
+  workflow_dispatch:       # Allow manual trigger from GitHub UI
+    inputs:
+      eval_mode:
+        description: 'Eval mode (smoke = 5 easy cases; full = all 20)'
+        required: false
+        default: 'smoke'
+        type: choice
+        options: [ smoke, full ]
+
+jobs:
+
+  # ─── Job 1: Unit tests (fast, no API calls) ────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r day13/colab3/requirements.txt -q
+
+      - name: Run unit tests
+        run: pytest day13/colab3/tests/ -v --tb=short -m "not integration"
+
+  # ─── Job 2: LLM Eval Quality Gate (requires GROQ_API_KEY) ──────
+  llm-eval:
+    name: LLM Eval Quality Gate
+    runs-on: ubuntu-latest
+    needs: unit-tests       # Only run eval if unit tests pass
+    permissions:
+      contents: read
+      pull-requests: write  # Needed to post PR comment
+
+    env:
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      EVAL_MODE: ${{ github.event.inputs.eval_mode || (github.event_name == 'schedule' && 'full') || 'smoke' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r day13/colab3/requirements.txt -q
+
+      - name: Run FinSight eval harness
+        id: run_eval
+        run: |
+          cd day13/colab3
+          python src/run_ci_eval.py
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+
+      - name: Upload eval artefacts
+        if: always()    # Upload even if gate fails
+        uses: actions/upload-artifact@v4
+        with:
+          name: finsight-eval-results-${{ github.run_number }}
+          path: day13/colab3/results/
+          retention-days: 30
+
+      - name: Post results to PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let gate;
+            try {
+              gate = JSON.parse(fs.readFileSync('day13/colab3/results/gate_outcome.json', 'utf8'));
+            } catch (e) {
+              console.log("Could not read gate_outcome.json:", e);
+              return;
+            }
+            const icon   = gate.passed ? '✅' : '❌';
+            const status = gate.passed ? 'PASSED' : 'FAILED';
+            const body = [
+              '## ' + icon + ' FinSight LLM Eval — Quality Gate ' + status,
+              '',
+              '**' + gate.reason + '**',
+              '',
+              gate.best_model
+                ? '🏆 Recommended model: `' + gate.best_model + '`'
+                : '⚠️ No model met all production constraints.',
+              '',
+              '> Full results uploaded as [Actions artefacts](' +
+                'https://github.com/' + context.repo.owner + '/' +
+                context.repo.repo + '/actions/runs/' + context.runId + ').',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner:    context.repo.owner,
+              repo:     context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+      - name: Fail job if quality gate failed
+        if: steps.run_eval.outputs.exit_code != '0'
+        run: |
+          echo "Quality gate failed — see results/gate_outcome.json for details."
+          exit 1
+
+  # ─── Job 3: Nightly full eval (schedule only) ──────────────────
+  nightly-full-eval:
+    name: Nightly Full Eval (20 cases × 4 models)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    needs: unit-tests
+
+    env:
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      EVAL_MODE: full
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r day13/colab3/requirements.txt -q
+
+      - name: Run full eval (all 20 cases × 4 Groq models)
+        run: |
+          cd day13/colab3
+          EVAL_MODE=full python src/run_ci_eval.py
+
+      - name: Upload nightly artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: finsight-nightly-${{ github.run_number }}
+          path: day13/colab3/results/
+          retention-days: 90
