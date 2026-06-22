@@ -363,3 +363,6 @@ Hume SDK / key missing        →  full simulated report (status: "completed (si
 - **API keys** — never commit `HUME_API_KEY`. Store it in `.env` or as an environment variable, and add `.env` to `.gitignore`.
 
 -----
+## output:
+
+https://github.com/simha-ren/EY-Training/blob/main/DAY17/Emotion_Analyzer/9d6fa2be-4a9c-4d46-96a2-68fe0885f55e.webm
