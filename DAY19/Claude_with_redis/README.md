@@ -2,6 +2,138 @@
 
 This notebook demonstrates building a sophisticated tool-using agent using Claude, integrated with a FastAPI backend and a Redis memory layer. It covers several advanced enhancements for agentic systems.
 
+##Architecture Diagram
+
+```mermaid
+flowchart TB
+
+    %% User Layer
+    USER[👤 User]
+
+    %% Claude Agent Layer
+    subgraph CLAUDE_AGENT["Claude Agent"]
+        CLAUDE[🤖 Claude LLM<br/>Reasoning + Tool Selection]
+
+        TOOL_USE[Tool Use Request<br/>tool_use block]
+        TOOL_RESULT[Tool Result Handling<br/>tool_result block]
+
+        CLAUDE --> TOOL_USE
+        TOOL_RESULT --> CLAUDE
+    end
+
+
+    %% Dispatcher Layer
+    subgraph DISPATCHER["Tool Execution Layer"]
+        DISPATCH[⚡ Tool Dispatcher<br/>DISPATCH_V4]
+
+        GET_ORDER[📦 get_order]
+        GET_CUSTOMER[👤 get_customer]
+
+        REMEMBER[🧠 remember_fact]
+        RECALL[🔎 recall_fact]
+        FORGET[🗑️ forget_fact]
+
+        DISPATCH --> GET_ORDER
+        DISPATCH --> GET_CUSTOMER
+        DISPATCH --> REMEMBER
+        DISPATCH --> RECALL
+        DISPATCH --> FORGET
+    end
+
+
+    %% FastAPI Layer
+    subgraph FASTAPI["FastAPI Backend"]
+        API[🚀 FastAPI Service]
+
+        ORDER_API[/GET /orders/{order_id}/]
+        CUSTOMER_API[/GET /customers/{customer_id}/]
+
+        API --> ORDER_API
+        API --> CUSTOMER_API
+    end
+
+
+    %% Redis Layer
+    subgraph REDIS_MEMORY["Redis Memory Layer"]
+        MEMORY[RedisMemory Class]
+
+        SHORT_TERM[Short-Term Memory<br/>Conversation History]
+
+        LONG_TERM[Long-Term Memory<br/>User Facts + TTL]
+
+        MEMORY --> SHORT_TERM
+        MEMORY --> LONG_TERM
+    end
+
+
+    %% Production Infrastructure
+    subgraph INFRA["Infrastructure"]
+        ANTHROPIC[☁️ Anthropic Claude API]
+
+        REDIS[(☁️ Redis / Upstash Redis)]
+    end
+
+
+    %% Main Flow
+    USER --> CLAUDE
+
+    CLAUDE --> ANTHROPIC
+    ANTHROPIC --> CLAUDE
+
+
+    CLAUDE --> TOOL_USE
+    TOOL_USE --> DISPATCH
+
+
+    %% Tool Routing
+    GET_ORDER --> API
+    GET_CUSTOMER --> API
+
+    REMEMBER --> MEMORY
+    RECALL --> MEMORY
+    FORGET --> MEMORY
+
+
+    %% Backend Responses
+    ORDER_API --> DISPATCH
+    CUSTOMER_API --> DISPATCH
+
+
+    %% Return Tool Results
+    DISPATCH --> TOOL_RESULT
+
+
+    %% Memory Connection
+    MEMORY --> REDIS
+
+
+    %% Agent Enhancements
+    subgraph FEATURES["Advanced Agent Features"]
+
+        COMPACTION[🔄 Conversation Compaction<br/>Rolling Summary]
+
+        TTL[⏳ TTL Memory Expiration]
+
+        PARALLEL[⚡ Parallel Tool Calls]
+
+        PII[🔒 Guarded Writes<br/>PII Detection]
+
+        TOKENS[📊 Token Accounting]
+
+    end
+
+
+    CLAUDE --> COMPACTION
+
+    MEMORY --> TTL
+
+    TOOL_USE --> PARALLEL
+
+    REMEMBER --> PII
+
+    CLAUDE --> TOKENS
+
+
 ## Architecture Overview
 
 The system consists of the following key components:
