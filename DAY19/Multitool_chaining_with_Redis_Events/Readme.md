@@ -1,4 +1,4 @@
-# Multi-tool Agent with Redis Event Queue
+# Project README: Multi-tool Agent with Redis Event Queue
 
 This project demonstrates a sophisticated ordering agent built in Google Colab, showcasing various advanced patterns for agent design, tool integration, and asynchronous processing.
 
@@ -18,7 +18,7 @@ This project demonstrates a sophisticated ordering agent built in Google Colab, 
 4.  **Background Worker Thread**: A separate Python thread that continuously processes jobs from the Redis Stream.
     *   It uses a **Consumer Group** for reliable message delivery.
     *   Includes **Dead-Letter Queue (DLQ)** and **Retry Mechanism** for email jobs with invalid addresses.
-5.  **Trace Spans**: `run_tool` is wrapped to record execution details (tool name, arguments, duration, success/failure) for every tool call, providing a detailed per-turn trace table.
+5.  **Trace Spans**: `run_tool` is wrapped to record execution details (`tool`, `args`, `ms`, `ok`) for every tool call, providing a detailed per-turn trace table.
 
 ```mermaid
 graph TD
