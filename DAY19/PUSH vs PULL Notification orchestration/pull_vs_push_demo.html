@@ -1,0 +1,236 @@
+<div style="padding: 1rem 0; font-family: var(--font-sans);">
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+    <!-- PULL ARCHITECTURE -->
+    <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 1.25rem; border: 0.5px solid var(--color-border-tertiary);">
+      <h3 style="margin: 0 0 1rem 0; font-size: 16px; font-weight: 500; color: var(--color-text-primary);">Pull architecture (polling)</h3>
+      
+      <div style="display: flex; gap: 8px; margin-bottom: 1rem;">
+        <button id="pullToggle" style="flex: 1; padding: 8px 12px; font-size: 14px;">Start polling</button>
+        <select id="pullInterval" style="padding: 8px 12px; font-size: 14px; width: 100px;">
+          <option value="500">500ms</option>
+          <option value="1000" selected>1s</option>
+          <option value="2000">2s</option>
+          <option value="3000">3s</option>
+        </select>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem;">
+        <div style="background: var(--color-background-primary); padding: 0.75rem; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary);">
+          <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px;">Requests sent</div>
+          <div style="font-size: 18px; font-weight: 500; color: var(--color-text-primary);" id="pullReqs">0</div>
+        </div>
+        <div style="background: var(--color-background-primary); padding: 0.75rem; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary);">
+          <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px;">Avg latency</div>
+          <div style="font-size: 18px; font-weight: 500; color: var(--color-text-primary);" id="pullLatency">—</div>
+        </div>
+      </div>
+
+      <div style="background: var(--color-background-primary); border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); padding: 0.75rem; margin-bottom: 1rem; max-height: 200px; overflow-y: auto; font-size: 13px; font-family: var(--font-mono);">
+        <div id="pullLog" style="color: var(--color-text-secondary);">
+          <div>Ready to poll...</div>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <div style="flex: 1; font-size: 12px;">
+          <div style="color: var(--color-text-secondary); margin-bottom: 4px;">Empty responses</div>
+          <div style="font-size: 14px; font-weight: 500; color: var(--color-text-primary);" id="pullEmpty">0</div>
+        </div>
+        <div style="flex: 1; font-size: 12px;">
+          <div style="color: var(--color-text-secondary); margin-bottom: 4px;">Wasted bandwidth</div>
+          <div style="font-size: 14px; font-weight: 500; color: var(--color-text-primary);" id="pullWaste">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PUSH ARCHITECTURE -->
+    <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 1.25rem; border: 0.5px solid var(--color-border-tertiary);">
+      <h3 style="margin: 0 0 1rem 0; font-size: 16px; font-weight: 500; color: var(--color-text-primary);">Push architecture (events)</h3>
+      
+      <div style="display: flex; gap: 8px; margin-bottom: 1rem;">
+        <button id="pushToggle" style="flex: 1; padding: 8px 12px; font-size: 14px;">Start server</button>
+        <select id="updateFreq" style="padding: 8px 12px; font-size: 14px; width: 100px;">
+          <option value="1000">1/sec</option>
+          <option value="2000" selected>1/2sec</option>
+          <option value="3000">1/3sec</option>
+          <option value="5000">1/5sec</option>
+        </select>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem;">
+        <div style="background: var(--color-background-primary); padding: 0.75rem; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary);">
+          <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px;">Updates received</div>
+          <div style="font-size: 18px; font-weight: 500; color: var(--color-text-primary);" id="pushUpdates">0</div>
+        </div>
+        <div style="background: var(--color-background-primary); padding: 0.75rem; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary);">
+          <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px;">Avg latency</div>
+          <div style="font-size: 18px; font-weight: 500; color: var(--color-text-primary);" id="pushLatency">—</div>
+        </div>
+      </div>
+
+      <div style="background: var(--color-background-primary); border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); padding: 0.75rem; margin-bottom: 1rem; max-height: 200px; overflow-y: auto; font-size: 13px; font-family: var(--font-mono);">
+        <div id="pushLog" style="color: var(--color-text-secondary);">
+          <div>Waiting for server...</div>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <div style="flex: 1; font-size: 12px;">
+          <div style="color: var(--color-text-secondary); margin-bottom: 4px;">Connection status</div>
+          <div style="font-size: 14px; font-weight: 500;" id="pushStatus" style="color: var(--color-text-warning);">disconnected</div>
+        </div>
+        <div style="flex: 1; font-size: 12px;">
+          <div style="color: var(--color-text-secondary); margin-bottom: 4px;">Efficiency</div>
+          <div style="font-size: 14px; font-weight: 500; color: var(--color-text-primary);" id="pushEfficiency">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPARISON CHART -->
+  <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 1.25rem; border: 0.5px solid var(--color-border-tertiary);">
+    <h3 style="margin: 0 0 1rem 0; font-size: 16px; font-weight: 500; color: var(--color-text-primary);">Metrics over time</h3>
+    <canvas id="comparisonChart" style="max-height: 300px;"></canvas>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+let pullActive = false, pushActive = false;
+let pullStats = { requests: 0, empty: 0, latencies: [], log: [] };
+let pushStats = { updates: 0, latencies: [], log: [] };
+let serverUpdates = [];
+let updateCountdown = 0;
+
+const chart = new Chart(document.getElementById('comparisonChart'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'Pull: requests', borderColor: '#D4537E', backgroundColor: '#D4537E20', tension: 0.3, fill: false, data: [] },
+      { label: 'Push: updates', borderColor: '#1D9E75', backgroundColor: '#1D9E7520', tension: 0.3, fill: false, data: [] }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+});
+
+function addLog(type, msg) {
+  const logs = type === 'pull' ? pullStats.log : pushStats.log;
+  logs.push(msg);
+  if (logs.length > 8) logs.shift();
+  const logEl = document.getElementById(type + 'Log');
+  logEl.innerHTML = logs.map(l => `<div>${l}</div>`).join('');
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function updateUI() {
+  // Pull stats
+  document.getElementById('pullReqs').textContent = pullStats.requests;
+  const avgPullLat = pullStats.latencies.length ? Math.round(pullStats.latencies.reduce((a,b)=>a+b)/pullStats.latencies.length) : '—';
+  document.getElementById('pullLatency').textContent = avgPullLat === '—' ? '—' : avgPullLat + 'ms';
+  document.getElementById('pullEmpty').textContent = pullStats.empty;
+  const wastePercent = pullStats.requests > 0 ? Math.round(pullStats.empty / pullStats.requests * 100) : 0;
+  document.getElementById('pullWaste').textContent = wastePercent + '%';
+
+  // Push stats
+  document.getElementById('pushUpdates').textContent = pushStats.updates;
+  const avgPushLat = pushStats.latencies.length ? Math.round(pushStats.latencies.reduce((a,b)=>a+b)/pushStats.latencies.length) : '—';
+  document.getElementById('pushLatency').textContent = avgPushLat === '—' ? '—' : avgPushLat + 'ms';
+  document.getElementById('pushStatus').textContent = pushActive ? 'connected' : 'disconnected';
+  const efficiency = pushStats.updates > 0 ? Math.round(pushStats.updates / (pullStats.requests || 1) * 100) : '—';
+  document.getElementById('pushEfficiency').textContent = efficiency === '—' ? '—' : efficiency + '%';
+
+  // Update chart
+  const time = Math.floor(Date.now() / 1000) % 60;
+  if (!chart.data.labels.includes(time)) {
+    chart.data.labels.push(time);
+    chart.data.datasets[0].data.push(pullStats.requests);
+    chart.data.datasets[1].data.push(pushStats.updates);
+    if (chart.data.labels.length > 20) {
+      chart.data.labels.shift();
+      chart.data.datasets.forEach(d => d.data.shift());
+    }
+    chart.update('none');
+  }
+}
+
+function simulatePoll(interval) {
+  if (!pullActive) return;
+  const before = performance.now();
+  const hasUpdate = Math.random() < 0.3; // 30% chance of update
+  const latency = Math.random() * 100 + 50; // 50-150ms
+  const after = before + latency;
+  
+  pullStats.requests++;
+  pullStats.latencies.push(latency);
+  if (pullStats.latencies.length > 10) pullStats.latencies.shift();
+  
+  if (!hasUpdate) {
+    pullStats.empty++;
+    addLog('pull', `Poll #${pullStats.requests}: empty (${Math.round(latency)}ms)`);
+  } else {
+    addLog('pull', `Poll #${pullStats.requests}: update! (${Math.round(latency)}ms)`);
+  }
+  
+  updateUI();
+  setTimeout(() => simulatePoll(interval), interval);
+}
+
+function simulateServer(interval) {
+  if (!pushActive) return;
+  
+  updateCountdown--;
+  if (updateCountdown <= 0) {
+    const latency = Math.random() * 50 + 10; // 10-60ms for delivery
+    pushStats.updates++;
+    pushStats.latencies.push(latency);
+    if (pushStats.latencies.length > 10) pushStats.latencies.shift();
+    addLog('push', `Update pushed (${Math.round(latency)}ms latency)`);
+    updateCountdown = Math.random() * 0.5 + 0.75; // Randomize next update timing
+  }
+  
+  updateUI();
+  setTimeout(() => simulateServer(interval), 100);
+}
+
+document.getElementById('pullToggle').onclick = function() {
+  pullActive = !pullActive;
+  this.textContent = pullActive ? 'Stop polling' : 'Start polling';
+  if (pullActive) {
+    pullStats = { requests: 0, empty: 0, latencies: [], log: [] };
+    const interval = parseInt(document.getElementById('pullInterval').value);
+    addLog('pull', `Started polling every ${interval}ms...`);
+    simulatePoll(interval);
+  }
+};
+
+document.getElementById('pushToggle').onclick = function() {
+  pushActive = !pushActive;
+  this.textContent = pushActive ? 'Stop server' : 'Start server';
+  if (pushActive) {
+    pushStats = { updates: 0, latencies: [], log: [] };
+    const interval = parseInt(document.getElementById('updateFreq').value);
+    updateCountdown = 1;
+    addLog('push', `Server running (update every ~${interval}ms)...`);
+    simulateServer(interval);
+  }
+};
+
+document.getElementById('pullInterval').onchange = function() {
+  if (pullActive) {
+    pullActive = false;
+    document.getElementById('pullToggle').click();
+    setTimeout(() => document.getElementById('pullToggle').click(), 100);
+  }
+};
+
+document.getElementById('updateFreq').onchange = function() {
+  if (pushActive) {
+    pushActive = false;
+    document.getElementById('pushToggle').click();
+    setTimeout(() => document.getElementById('pushToggle').click(), 100);
+  }
+};
+
+setInterval(updateUI, 500);
+</script>
