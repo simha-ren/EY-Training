@@ -1,4 +1,4 @@
-# Project README: Multi-tool Agent with Redis Event Queue
+# Multi-tool Agent with Redis Event Queue
 
 This project demonstrates a sophisticated ordering agent built in Google Colab, showcasing various advanced patterns for agent design, tool integration, and asynchronous processing.
 
