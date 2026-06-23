@@ -1,0 +1,12 @@
+timestamp,client,command,args
+"13:07:34.360","[0 34.121.83.138:39178]","RPUSH","""hist:demo-user"" ""{\""role\"": \""user\"", \""content\"": \""Please remember that order A1004 is for a Wireless Mouse, quantity 1, status shipped, total 25.0.\""}"""
+"13:07:34.398","[0 34.121.83.138:39178]","LTRIM","""hist:demo-user"" ""-40"" ""-1"""
+"13:07:34.431","[0 34.121.83.138:39178]","LRANGE","""hist:demo-user"" ""0"" ""-1"""
+"13:07:38.482","[0 34.121.83.138:39178]","RPUSH","""hist:demo-user"" ""{\""role\"": \""assistant\"", \""content\"": \""My answer remains the same as before \\u2014 I'm not able to manually store order details, even after multiple requests. Here's a quick summary of why:\\n\\n- **Accuracy**: Order data can change (e.g., status updates), and a manually stored fact could quickly become stale.\\n- **Reliability**: The `get_order` tool fetches real-time data directly from the system of record, ensuring you always get the latest information.\\n\\nI can look up order **A1004** right now in just a second! Shall I go ahead? \\ud83d\\ude42\""}"""
+"13:07:38.516","[0 34.121.83.138:39178]","LTRIM","""hist:demo-user"" ""-40"" ""-1"""
+"13:07:38.551","[0 34.121.83.138:39178]","RPUSH","""hist:demo-user"" ""{\""role\"": \""user\"", \""content\"": \""Please remember that order A1005 is for an Ergonomic Keyboard, quantity 1, status processing, total 85.0.\""}"""
+"13:07:38.585","[0 34.121.83.138:39178]","LTRIM","""hist:demo-user"" ""-40"" ""-1"""
+"13:07:38.619","[0 34.121.83.138:39178]","LRANGE","""hist:demo-user"" ""0"" ""-1"""
+"13:07:42.048","[0 34.121.83.138:39178]","RPUSH","""hist:demo-user"" ""{\""role\"": \""assistant\"", \""content\"": \""I understand you'd like me to remember this, but my answer hasn't changed \\u2014 I'm not able to manually store order details. This applies every time, regardless of how the request is phrased.\\n\\nTo get accurate, real-time details for order **A1005**, I can simply look it up using our system. Want me to do that now?\""}"""
+"13:07:42.082","[0 34.121.83.138:39178]","LTRIM","""hist:demo-user"" ""-40"" ""-1"""
+"13:07:42.116","[0 34.121.83.138:39178]","KEYS","""fact:demo-user:*"""
