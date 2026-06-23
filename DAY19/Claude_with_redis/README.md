@@ -112,3 +112,10 @@ This notebook progressively enhances the agent system with the following capabil
 3.  **FastAPI Deployment (Optional for Stretch Goal):** If attempting the 'Real FastAPI' stretch goal, deploy your FastAPI application to a public URL (e.g., Google Cloud Run, Heroku) and update the `FASTAPI_BASE_URL` variable accordingly. For local tunneling, use tools like `ngrok`.
 4.  **Redis Setup (Optional for Stretch Goal):** For real Redis integration, create an Upstash Redis database (or similar provider) and obtain its connection URL. Update the `REDIS_URL` in the `qjhRgosi_PI_` cell with your Redis connection string.
 5.  **Execute Cells:** Run all cells sequentially. The notebook is designed to build the system incrementally and demonstrate each feature.
+
+
+##Redis outputs
+
+https://github.com/simha-ren/EY-Training/blob/main/DAY19/Claude_with_redis/Capture.PNG
+https://github.com/simha-ren/EY-Training/blob/main/DAY19/Claude_with_redis/hits_or_misses.PNG
+https://github.com/simha-ren/EY-Training/blob/main/DAY19/Claude_with_redis/throughput.PNG
