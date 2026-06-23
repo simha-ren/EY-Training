@@ -2,47 +2,6 @@
 
 This project implements a **Small Support Agent** designed to handle customer inquiries using a combination of AI models, specialized tools, and robust infrastructure components. The agent demonstrates key concepts like short-term memory, long-term knowledge retrieval, tool orchestration, and observability.
 
-### Conceptual Architecture Diagram
-
-```mermaid
-graph TD
-    User[Customer User] --> |Query| Agent[Support Agent]
-    Agent --> |Short-Term Memory (Redis)| ShortTermMemory[Redis (Conversation History)]
-    Agent --> |Long-Term Recall (Vector Store)| SimpleVectorStore[Simple Vector Store (Policy Docs)]
-    Agent --> |Tool Orchestration & Execution| ToolDispatcher[Tool Dispatcher]
-
-    ToolDispatcher --> |Lookup Order| SQLiteDB[SQLite DB (Orders, Tickets, Refunds, Approvals)]
-    ToolDispatcher --> |Create Ticket| SQLiteDB
-    ToolDispatcher --> |Request Refund| SQLiteDB
-    ToolDispatcher --> |Approve Refund| SQLiteDB
-    ToolDispatcher --> |Send Follow-up Email (Async)| RedisStream[Redis Stream (Email Queue)]
-    ToolDispatcher --> |Check Email Job Status| RedisStream
-
-    RedisStream --> EmailWorker[Email Worker (processes async jobs)]
-
-    Agent --> |Logging & Metrics| TraceRecorder[Trace Recorder (Observability)]
-    Agent --> |LLM (Anthropic Claude)| Claude[Anthropic Claude (Live Mode)]
-    Agent --> |Mock Agent| MockAgent[Offline Mock Mode]
-
-    subgraph Data Stores
-        ShortTermMemory
-        SimpleVectorStore
-        SQLiteDB
-        RedisStream
-    end
-
-    subgraph Agent Core
-        Agent
-        ToolDispatcher
-    end
-
-    subgraph External Interactions
-        User
-        EmailWorker
-        Claude
-        MockAgent
-    end
-```
 
 ### High-Level Flow:
 
