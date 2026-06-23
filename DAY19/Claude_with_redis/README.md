@@ -2,6 +2,67 @@
 
 This notebook demonstrates building a sophisticated tool-using agent using Claude, integrated with a FastAPI backend and a Redis memory layer. It covers several advanced enhancements for agentic systems.        
 
+## Architecture
+
+```mermaid
+flowchart TD
+    User(["User"])
+
+    subgraph AgentLayer["Agent Layer"]
+        Claude["Claude Agent<br/>SYSTEM + TOOLS<br/>(parallel tool_use,<br/>token accounting)"]
+        Dispatch["Dispatch Map<br/>DISPATCH_V4"]
+        Summarizer["Rolling Summary<br/>(cheaper model)<br/>conversation compaction"]
+    end
+
+    subgraph ToolFns["Tool Functions"]
+        GetOrder["get_order"]
+        GetCustomer["get_customer"]
+        Remember["remember_fact<br/>(PII-guarded)"]
+        Recall["recall_fact"]
+        Forget["forget_fact"]
+    end
+
+    subgraph Backend["FastAPI Backend"]
+        OrdersEP["/orders/{order_id}"]
+        CustomersEP["/customers/{customer_id}"]
+    end
+
+    subgraph RedisMem["Redis Memory (RedisMemory)"]
+        History["Short-term<br/>Conversation History"]
+        Facts["Long-term Facts<br/>per-key TTL"]
+    end
+
+    User -->|"1. message"| Claude
+    Claude -->|"2. tool_use block"| Dispatch
+    Dispatch --> GetOrder & GetCustomer & Remember & Recall & Forget
+
+    GetOrder -->|"GET"| OrdersEP
+    GetCustomer -->|"GET"| CustomersEP
+    Remember -->|"set (reject PII)"| Facts
+    Recall -->|"get"| Facts
+    Forget -->|"del"| Facts
+
+    OrdersEP -.->|"tool_result"| Claude
+    CustomersEP -.->|"tool_result"| Claude
+    Facts -.->|"tool_result"| Claude
+
+    Claude <-->|"read / append"| History
+    History -.->|"summarize when<br/>history > limit"| Summarizer
+    Summarizer -.->|"compacted context"| Claude
+
+    Claude -->|"7. natural-language response"| User
+
+    classDef agent fill:#e8f0fe,stroke:#4285f4,color:#111;
+    classDef tools fill:#fef7e0,stroke:#f9ab00,color:#111;
+    classDef backend fill:#e6f4ea,stroke:#34a853,color:#111;
+    classDef redis fill:#fce8e6,stroke:#ea4335,color:#111;
+
+    class Claude,Dispatch,Summarizer agent;
+    class GetOrder,GetCustomer,Remember,Recall,Forget tools;
+    class OrdersEP,CustomersEP backend;
+    class History,Facts redis;
+```
+
 ## Architecture Overview
 
 The system consists of the following key components:
