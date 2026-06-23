@@ -341,17 +341,29 @@ graph TD
 ```mermaid
 graph LR
     Agent["🤖 Agent"]
+    Manager["Manager Credentials<br/>(for each client)"]
     
-    Agent -->|Assume role via<br/>STS token| Manager["Manager Credentials<br/>(for each client)"]
+    R1["sellingpartner:orders:read"]
+    R2["sellingpartner:inventory:read"]
+    R3["sellingpartner:listings:write"]
+    R4["sellingpartner:reports:read"]
+    R5["sellingpartner:returns:read"]
     
-    subgraph Roles["SP-API Roles Granted"]
-        Direction LR
-        R1["sellingpartner:orders:read"]
-        R2["sellingpartner:inventory:read"]
-        R3["sellingpartner:listings:write"]
-        R4["sellingpartner:reports:read"]
-        R5["sellingpartner:returns:read"]
-    end
+    Orders["📦 Orders<br/>(Read Only)"]
+    Inventory["📊 Inventory<br/>(Read Only)"]
+    Listings["📋 Listings<br/>(Limited Write)"]
+    Reports["📈 Reports<br/>(Read Only)"]
+    Returns["↩️ Returns<br/>(Read Only)"]
+    
+    RDT1{"Needs<br/>Buyer PII?"}
+    RDT2{"Needs<br/>Buyer PII?"}
+    
+    RDT_Token["🔐 Restricted Data Token<br/>(Specific tool only)"]
+    StandardToken["Standard Token"]
+    
+    FinalAuth["✅ Authorized Tool Calls<br/>(e.g., Generate Shipping Label)"]
+    
+    Agent -->|Assume role via<br/>STS token| Manager
     
     Manager --> R1
     Manager --> R2
@@ -359,27 +371,31 @@ graph LR
     Manager --> R4
     Manager --> R5
     
-    R1 --> Orders["📦 Orders<br/>(Read Only)"]
-    R2 --> Inventory["📊 Inventory<br/>(Read Only)"]
-    R3 --> Listings["📋 Listings<br/>(Limited Write)"]
-    R4 --> Reports["📈 Reports<br/>(Read Only)"]
-    R5 --> Returns["↩️ Returns<br/>(Read Only)"]
+    R1 --> Orders
+    R2 --> Inventory
+    R3 --> Listings
+    R4 --> Reports
+    R5 --> Returns
     
-    Orders --> RDT1{"Needs<br/>Buyer PII?"}
-    Listings --> RDT2{"Needs<br/>Buyer PII?"}
+    Orders --> RDT1
+    Listings --> RDT2
     
-    RDT1 -->|Yes| RDT_Token["🔐 Restricted Data Token<br/>(Specific tool only)"]
-    RDT1 -->|No| StandardToken["Standard Token"]
+    RDT1 -->|Yes| RDT_Token
+    RDT1 -->|No| StandardToken
     
     RDT2 -->|Yes for Shipping| RDT_Token
     RDT2 -->|No| StandardToken
     
-    RDT_Token --> FinalAuth["✅ Authorized Tool Calls<br/>(e.g., Generate Shipping Label)"]
+    RDT_Token --> FinalAuth
     StandardToken --> FinalAuth
     
     style Agent fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
     style Manager fill:#fff9c4,stroke:#fbc02d,stroke-width:2px
-    style Roles fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style R1 fill:#e8f5e9,stroke:#388e3c
+    style R2 fill:#e8f5e9,stroke:#388e3c
+    style R3 fill:#e8f5e9,stroke:#388e3c
+    style R4 fill:#e8f5e9,stroke:#388e3c
+    style R5 fill:#e8f5e9,stroke:#388e3c
     style RDT_Token fill:#ffccbc,stroke:#d84315,stroke-width:2px
     style StandardToken fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
     style FinalAuth fill:#a5d6a7,stroke:#1b5e20,stroke-width:2px
@@ -702,6 +718,7 @@ graph TB
 ## Conclusion: From Design to Operations
 
 This case study resolves the Amazon marketplace integration problem through a **multi-server MCP topology with clear trust boundaries, staged rollout, and human-in-the-loop gates on all financial decisions**.
+
 
 ### Key Takeaways
 
