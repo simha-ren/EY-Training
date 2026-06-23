@@ -2,16 +2,6 @@
 
 A comprehensive guide to understanding, comparing, and implementing polling and event-driven notification systems. Includes production-ready code, performance benchmarks, and decision frameworks.
 
-**Table of Contents**
-- [Overview](#overview)
-- [Architecture Comparison](#architecture-comparison)
-- [Pull Architecture](#pull-architecture)
-- [Push Architecture](#push-architecture)
-- [Implementation Examples](#implementation-examples)
-- [Decision Framework](#decision-framework)
-- [Benchmarks](#benchmarks)
-- [Best Practices](#best-practices)
-
 ---
 
 ## Overview
@@ -796,7 +786,5 @@ export default function() {
 - **Monitoring**: Active connections, message latency, reconnections
 
 ---
-
-## License
 
 MIT © 2024
