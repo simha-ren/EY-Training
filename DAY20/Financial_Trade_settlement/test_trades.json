@@ -1,0 +1,32 @@
+[
+    {
+        "trade_id": "T001",
+        "trade_data": {
+            "type": "FX_SPOT",
+            "amount": 50000000,
+            "currency": "USD/JPY",
+            "counterparty": "MUFG",
+            "settlement_type": "T+0"
+        }
+    },
+    {
+        "trade_id": "T002",
+        "trade_data": {
+            "type": "EQUITY",
+            "amount": 2500000,
+            "currency": "GBP",
+            "counterparty": "BARC",
+            "settlement_type": "T+2"
+        }
+    },
+    {
+        "trade_id": "T003",
+        "trade_data": {
+            "type": "DERIVATIVE",
+            "amount": 999999999,
+            "currency": "EUR",
+            "counterparty": "UNKN",
+            "settlement_type": "T+2"
+        }
+    }
+]
