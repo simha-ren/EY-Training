@@ -1,0 +1,21 @@
+{
+  "title": "ProposalForge — Agent Pipeline",
+  "uid": "proposalforge",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {"from": "now-1h", "to": "now"},
+  "panels": [
+    {"id":1,"title":"Agent calls (rate)","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},
+     "targets":[{"expr":"rate(pf_agent_calls_total[1m])","legendFormat":"{{agent}} {{status}}"}]},
+    {"id":2,"title":"Agent latency p95","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":0},
+     "targets":[{"expr":"histogram_quantile(0.95, rate(pf_agent_latency_seconds_bucket[5m]))","legendFormat":"{{agent}}"}]},
+    {"id":3,"title":"Last quality score","type":"stat","gridPos":{"h":6,"w":6,"x":0,"y":8},
+     "targets":[{"expr":"pf_last_quality_score"}]},
+    {"id":4,"title":"Active runs","type":"stat","gridPos":{"h":6,"w":6,"x":6,"y":8},
+     "targets":[{"expr":"pf_active_runs"}]},
+    {"id":5,"title":"Guardrail hits","type":"timeseries","gridPos":{"h":6,"w":12,"x":12,"y":8},
+     "targets":[{"expr":"increase(pf_guardrail_hits_total[5m])","legendFormat":"{{kind}}"}]},
+    {"id":6,"title":"RAGAS faithfulness","type":"timeseries","gridPos":{"h":7,"w":24,"x":0,"y":14},
+     "targets":[{"expr":"pf_ragas_faithfulness"}]}
+  ]
+}

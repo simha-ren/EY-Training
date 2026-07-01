@@ -1,0 +1,64 @@
+{
+  "samples": [
+    {
+      "user_input": "How do I qualify for a home loan?",
+      "domain": "finance",
+      "expected_source": "loan_eligibility.md",
+      "reference_terms": ["loan-to-value", "ltv", "down payment", "property", "secured"]
+    },
+    {
+      "user_input": "What is the difference between a fixed deposit and a mutual fund?",
+      "domain": "finance",
+      "expected_source": "investment_products.md",
+      "reference_terms": ["fixed deposit", "guaranteed", "mutual fund", "market risk", "returns"]
+    },
+    {
+      "user_input": "Who regulates mutual funds and the stock market in India?",
+      "domain": "finance",
+      "expected_source": "regulatory_faq.md",
+      "reference_terms": ["sebi", "securities", "mutual funds", "exchanges"]
+    },
+    {
+      "user_input": "What are the steps for a cashless claim during planned admission?",
+      "domain": "healthcare",
+      "expected_source": "cashless_claims.md",
+      "reference_terms": ["pre-authorization", "tpa", "network hospital", "approval"]
+    },
+    {
+      "user_input": "What documents should I collect at discharge?",
+      "domain": "healthcare",
+      "expected_source": "admission_discharge.md",
+      "reference_terms": ["discharge summary", "final bill", "pharmacy", "reports"]
+    },
+    {
+      "user_input": "What is a waiting period for pre-existing conditions?",
+      "domain": "healthcare",
+      "expected_source": "coverage_faq.md",
+      "reference_terms": ["waiting period", "pre-existing", "years", "covered"]
+    },
+    {
+      "user_input": "How do I manage brown planthopper in rice?",
+      "domain": "agriculture",
+      "expected_source": "crop_pest_advisory.md",
+      "reference_terms": ["brown planthopper", "nitrogen", "canopy", "rice"]
+    },
+    {
+      "user_input": "Who is eligible for crop insurance and how are claims assessed?",
+      "domain": "agriculture",
+      "expected_source": "govt_schemes.md",
+      "reference_terms": ["crop insurance", "premium", "yield", "notified"]
+    },
+    {
+      "user_input": "Why should I do a soil test before sowing?",
+      "domain": "agriculture",
+      "expected_source": "soil_irrigation.md",
+      "reference_terms": ["soil test", "ph", "nutrients", "fertilizer"]
+    },
+    {
+      "user_input": "How is my debt-to-income ratio used in lending?",
+      "domain": "finance",
+      "expected_source": "loan_eligibility.md",
+      "reference_terms": ["debt-to-income", "emi", "net monthly income", "40-50"]
+    }
+  ]
+}

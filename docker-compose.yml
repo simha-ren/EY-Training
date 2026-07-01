@@ -1,0 +1,76 @@
+services:
+  proposalforge-pro:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proposalforge-pro
+    ports:
+    - 8000:8000
+    - 8001:8001
+    environment:
+    - GROQ_API_KEY=${GROQ_API_KEY}
+    - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+    - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+    - CLAUDE_MODEL=claude-3-5-sonnet-20241022
+    - VECTOR_BACKEND=${VECTOR_BACKEND:-auto}
+    - PINECONE_API_KEY=${PINECONE_API_KEY}
+    - APP_ENV=production
+    - AUDIT_DB_PATH=/app/data/audit.db
+    - DATABASE_URL=sqlite:///./data/proposalforge.db
+    - ENABLE_PII_REDACTION=True
+    - PROMETHEUS_MULTIPROC_DIR=/tmp/pf_metrics
+    - VECTOR_BACKEND=${VECTOR_BACKEND:-qdrant}
+    - QDRANT_URL=http://qdrant:6333
+    - EMBEDDING_MODEL=${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+    - LLM_BASE_URL=${LLM_BASE_URL:-http://ollama:11434/v1}
+    - LLM_MODEL=${LLM_MODEL:-llama3.1:8b}
+    - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+    - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+    - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-proposalforge}
+    volumes:
+    - ./data:/app/data
+    - ./logs:/app/logs
+    - ./temp:/app/temp
+    networks:
+    - proposalforge-network
+    restart: unless-stopped
+    depends_on:
+    - qdrant
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:8001/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: proposalforge-qdrant
+    ports:
+    - 6333:6333
+    volumes:
+    - qdrant-data:/qdrant/storage
+    networks:
+    - proposalforge-network
+    restart: unless-stopped
+  ollama:
+    image: ollama/ollama:latest
+    container_name: proposalforge-ollama
+    ports:
+    - 11434:11434
+    volumes:
+    - ollama-data:/root/.ollama
+    networks:
+    - proposalforge-network
+    restart: unless-stopped
+networks:
+  proposalforge-network:
+    driver: bridge
+volumes:
+  proposalforge-data: null
+  proposalforge-logs: null
+  qdrant-data: null
+  ollama-data: null

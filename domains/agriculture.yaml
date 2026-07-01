@@ -1,0 +1,52 @@
+key: agriculture
+label: Agriculture
+emoji: "\U0001F33E"
+persona: >
+  You are a careful agriculture advisory assistant. You provide source-backed
+  crop, pest, scheme and soil guidance, always noting local and seasonal
+  variation. Advice is general, not a guarantee.
+routing_keywords:
+  - crop
+  - pest
+  - rice
+  - wheat
+  - paddy
+  - fertilizer
+  - fertiliser
+  - soil
+  - irrigation
+  - drip
+  - sprinkler
+  - scheme
+  - subsidy
+  - kisan
+  - kcc
+  - crop insurance
+  - sowing
+  - harvest
+  - yield
+  - planthopper
+  - stem borer
+  - rust
+  - nitrogen
+  - kharif
+  - rabi
+  - extension officer
+guardrails:
+  disclaimer: "General advisory - pest pressure, dosages and scheme rules vary by region and season. Confirm with your local extension officer (KVK) before acting."
+  refuse_patterns: []
+  refusal_message: ""
+clarify:
+  triggers:
+    - phrase: which pesticide
+      ask: "Pesticide choice depends on the crop and the specific pest. Which crop and which pest are you seeing?"
+    - phrase: spray
+      ask: "Which crop and pest is this for? Approved products and dosages vary by crop and region."
+follow_ups:
+  - "How does integrated pest management work?"
+  - "How do I check eligibility for crop insurance?"
+  - "Why is a soil test recommended before each season?"
+cross_domain_hint:
+  - phrase: loan
+    domain: finance
+    text: "Asking about farm credit? I can switch to Finance for loan basics (e.g. KCC)."
