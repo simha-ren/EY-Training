@@ -1,0 +1,126 @@
+{
+  "job_id": "sim_20260622_230503",
+  "status": "completed (simulated)",
+  "video_file": "Here is how I mange clients  exceptions on UPWORK.mp4",
+  "models_used": [
+    "face",
+    "prosody",
+    "burst",
+    "language"
+  ],
+  "timestamp": "2026-06-22T23:05:03.382704",
+  "predictions": {
+    "face": {
+      "segments": [
+        {
+          "time": {
+            "begin": 0.0,
+            "end": 5.0
+          },
+          "emotions": {
+            "Joy": 75.2,
+            "Surprise (positive)": 42.8,
+            "Amusement": 68.5,
+            "Contemplation": 31.2,
+            "Interest": 55.7,
+            "Determination": 48.3,
+            "Calmness": 22.1,
+            "Confusion": 15.4
+          }
+        }
+      ],
+      "top_emotions": {
+        "Joy": 75.2,
+        "Surprise (positive)": 42.8,
+        "Amusement": 68.5,
+        "Contemplation": 31.2,
+        "Interest": 55.7,
+        "Determination": 48.3,
+        "Calmness": 22.1,
+        "Confusion": 15.4
+      }
+    },
+    "prosody": {
+      "segments": [
+        {
+          "time": {
+            "begin": 0.0,
+            "end": 5.0
+          },
+          "emotions": {
+            "Excitement": 62.4,
+            "Interest": 71.3,
+            "Amusement": 45.6,
+            "Joy": 58.2,
+            "Concentration": 33.1,
+            "Calmness": 28.7,
+            "Contemplation": 39.8,
+            "Realization": 22.5
+          }
+        }
+      ],
+      "top_emotions": {
+        "Excitement": 62.4,
+        "Interest": 71.3,
+        "Amusement": 45.6,
+        "Joy": 58.2,
+        "Concentration": 33.1,
+        "Calmness": 28.7,
+        "Contemplation": 39.8,
+        "Realization": 22.5
+      }
+    },
+    "burst": {
+      "segments": [
+        {
+          "time": {
+            "begin": 0.0,
+            "end": 5.0
+          },
+          "emotions": {
+            "Laugh": 82.1,
+            "Sigh (of relief)": 15.3,
+            "Gasp": 8.7,
+            "Grunt": 5.2
+          }
+        }
+      ],
+      "top_emotions": {
+        "Laugh": 82.1,
+        "Sigh (of relief)": 15.3,
+        "Gasp": 8.7,
+        "Grunt": 5.2
+      }
+    },
+    "language": {
+      "segments": [
+        {
+          "time": {
+            "begin": 0.0,
+            "end": 5.0
+          },
+          "emotions": {
+            "Admiration": 55.3,
+            "Amusement": 67.8,
+            "Approval": 43.2,
+            "Excitement": 72.1,
+            "Joy": 61.5,
+            "Optimism": 38.9,
+            "Curiosity": 49.7,
+            "Gratitude": 25.4
+          }
+        }
+      ],
+      "top_emotions": {
+        "Admiration": 55.3,
+        "Amusement": 67.8,
+        "Approval": 43.2,
+        "Excitement": 72.1,
+        "Joy": 61.5,
+        "Optimism": 38.9,
+        "Curiosity": 49.7,
+        "Gratitude": 25.4
+      }
+    }
+  }
+}

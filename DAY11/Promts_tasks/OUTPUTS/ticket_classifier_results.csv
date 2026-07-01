@@ -1,0 +1,6 @@
+ticket_id,ticket,ground_truth,predicted_category,reason,is_correct
+T001,My card was charged twice for the same invoice. Please correct the bill.,Billing,Billing,The ticket is about charges.,True
+T002,The dashboard returns a 500 error whenever I open the integrations page.,Tech,Tech,The ticket reports a software error.,True
+T003,I cancelled within the trial period and need my payment refunded.,Refund,Refund,The user is requesting money back.,True
+T004,Can you tell me where to download last month's usage statement?,General,General,The ticket is an information request.,True
+T005,Our production account is locked and payroll processing is blocked today.,Escalate,Escalate,The issue blocks a critical workflow.,True

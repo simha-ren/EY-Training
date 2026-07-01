@@ -1,0 +1,11 @@
+Hypothesis/Objective:
+Identify and choose imputation
+
+Reasoning & Approach:
+Use time-based interpolation then backfill/ffill for edge values
+
+Python Code/Action:
+df.interpolate(method='time'); df.bfill().ffill()
+
+Interpretation Guide:
+If seasonality exists prefer interpolation; if sudden shifts, consider LOCF

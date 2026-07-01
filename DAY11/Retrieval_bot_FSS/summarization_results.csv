@@ -1,0 +1,79 @@
+Question,Answer,Context
+What are the eligibility criteria for the remote work stipend?,"Mock answer from retrieved policy context:
+Policy Document - Page 1
+This is a dummy policy document for testing the RAG system.
+It contains information about various company policies.
+■
+Remote Work Reimbursement Policy:
+Employees are eligible for a monthly remote work stipend of $50.
+This covers internet, electricity, and other office supplies.
+
+Policy Document - Page 2
+Travel Expense Policy:
+All business travel expenses must be pre-approved.
+Reimbursement requests must be submitted within 30 days of travel.
+
+Run without --mock to ask Gemini to write the final natural-language answer.","Policy Document - Page 1
+This is a dummy policy document for testing the RAG system.
+It contains information about various company policies.
+■
+Remote Work Reimbursement Policy:
+Employees are eligible for a monthly remote work stipend of $50.
+This covers internet, electricity, and other office supplies.
+
+Policy Document - Page 2
+Travel Expense Policy:
+All business travel expenses must be pre-approved.
+Reimbursement requests must be submitted within 30 days of travel."
+How long do I have to submit reimbursement requests for travel expenses?,"Mock answer from retrieved policy context:
+Policy Document - Page 2
+Travel Expense Policy:
+All business travel expenses must be pre-approved.
+Reimbursement requests must be submitted within 30 days of travel.
+
+Policy Document - Page 1
+This is a dummy policy document for testing the RAG system.
+It contains information about various company policies.
+■
+Remote Work Reimbursement Policy:
+Employees are eligible for a monthly remote work stipend of $50.
+This covers internet, electricity, and other office supplies.
+
+Run without --mock to ask Gemini to write the final natural-language answer.","Policy Document - Page 2
+Travel Expense Policy:
+All business travel expenses must be pre-approved.
+Reimbursement requests must be submitted within 30 days of travel.
+
+Policy Document - Page 1
+This is a dummy policy document for testing the RAG system.
+It contains information about various company policies.
+■
+Remote Work Reimbursement Policy:
+Employees are eligible for a monthly remote work stipend of $50.
+This covers internet, electricity, and other office supplies."
+What kind of expenses does the remote work stipend cover?,"Mock answer from retrieved policy context:
+Policy Document - Page 1
+This is a dummy policy document for testing the RAG system.
+It contains information about various company policies.
+■
+Remote Work Reimbursement Policy:
+Employees are eligible for a monthly remote work stipend of $50.
+This covers internet, electricity, and other office supplies.
+
+Policy Document - Page 2
+Travel Expense Policy:
+All business travel expenses must be pre-approved.
+Reimbursement requests must be submitted within 30 days of travel.
+
+Run without --mock to ask Gemini to write the final natural-language answer.","Policy Document - Page 1
+This is a dummy policy document for testing the RAG system.
+It contains information about various company policies.
+■
+Remote Work Reimbursement Policy:
+Employees are eligible for a monthly remote work stipend of $50.
+This covers internet, electricity, and other office supplies.
+
+Policy Document - Page 2
+Travel Expense Policy:
+All business travel expenses must be pre-approved.
+Reimbursement requests must be submitted within 30 days of travel."

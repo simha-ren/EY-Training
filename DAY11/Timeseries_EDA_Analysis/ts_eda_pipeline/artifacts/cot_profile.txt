@@ -1,0 +1,11 @@
+Hypothesis/Objective:
+Profile dataset columns and size
+
+Reasoning & Approach:
+Use pandas describe and head to inspect types and ranges
+
+Python Code/Action:
+df.head(); df.describe()
+
+Interpretation Guide:
+Review shapes and null counts

@@ -1,0 +1,34 @@
+Linkedin website implementation and again do analysis of what all features can be implemented on object storage, and which one (S3 OR blob storage) is best for same.
+
+TASK-1.Determine the features which you can implement for linkedin profiles/feeds through object storage
+
+ The features of linkedin are:Profile section,feeds or posts,notifications,messages
+
+* Profile section: can be implemented using Object storage because it has profile photos,cover images,documents uploads.*
+* Feeds/Posts section: Use object storage because we have post images/videos,Docs.
+* Messaging:use object storage because we have attached images,videos,files
+* Notifications:use object storage for any batch archieves
+* CDN & Logs related: use object storage for logs(user activity,feed impressions,raw data), analytics, CDN-related(serves images,serves feed,static content caching) we can use object storage
+
+* S3 is better for strong ecosysytem,scalbality for media,flexibility
+* Azure blob is better if we use microsoft ecosystem, strong enterprise identity, we can integrate with office tools.
+
+TASK-2: Difference between s3 or azure blob 
+
+S3 pros:
+1.Widely adopted
+2.Strong integration with CDN,Lambda
+3.Advanced capabilities like versioningt,cross-region replication,scalability
+
+S3 Cons:
+1.Pricing can be complex
+2.Enterprise identity is less secure compare to azure blob storage
+
+Azure blob storage-Pros:
+1.strong integartion with azure services
+2.simpler setup with microsoft based ecosystems
+
+Azure blob storage Cons:
+smaller ecosystem compared to AWS
+
+

@@ -1,0 +1,122 @@
+<svg viewBox="0 0 1080 720" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, system-ui, Arial">
+  <defs>
+    <style>
+      .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .title { fill:#f2f4f8; font-size:26px; font-weight:700; }
+      .sub { fill:#9aa0aa; font-size:14px; }
+      .h-amber { fill:#ffb84d; font-size:19px; font-weight:700; }
+      .h-green { fill:#3ddc84; font-size:19px; font-weight:700; }
+      .meta { fill:#9aa0aa; font-size:12px; }
+      .txt { fill:#e6e8ec; font-size:14px; }
+      .muted { fill:#aab0bb; font-size:12px; }
+      .ms { fill:#cfd3da; font-size:12px; }
+      .link { fill:#57e0c5; font-size:13px; font-weight:700; }
+    </style>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#9aa0aa"/>
+    </marker>
+    <marker id="cyan" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#57e0c5"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="720" fill="#0f1115" rx="14"/>
+
+  <!-- Title -->
+  <text x="540" y="44" text-anchor="middle" class="title">One request, recorded two ways</text>
+  <text x="540" y="68" text-anchor="middle" class="sub">watch the shapes — that's the whole difference</text>
+
+  <!-- Incoming request -->
+  <rect x="400" y="92" width="280" height="48" rx="10" fill="#23262e" stroke="#3a3f4a"/>
+  <text x="540" y="113" text-anchor="middle" class="txt" font-weight="700">Incoming request</text>
+  <text x="540" y="131" text-anchor="middle" class="mono meta">trace_id = 7f3a…e91</text>
+
+  <!-- split arrows -->
+  <path d="M480,140 C420,170 300,170 270,196" fill="none" stroke="#9aa0aa" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M600,140 C660,170 780,170 810,196" fill="none" stroke="#9aa0aa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ===================== LEFT: TRACE / SPANS ===================== -->
+  <rect x="40" y="200" width="480" height="430" rx="14" fill="#16191f" stroke="#2b3038"/>
+  <rect x="40" y="200" width="6" height="430" rx="3" fill="#ffb84d"/>
+  <text x="70" y="234" class="h-amber">◆ TRACE / SPANS</text>
+  <text x="70" y="258" class="meta">timed tree · sampled · lives days · read by engineers</text>
+  <text x="70" y="278" class="meta">Q: where did time go? where did it error?</text>
+
+  <!-- span tree -->
+  <!-- request -->
+  <text x="72" y="322" class="mono txt">request</text>
+  <rect x="200" y="312" width="260" height="13" rx="3" fill="#ffb84d" opacity="0.85"/>
+  <text x="470" y="322" class="mono ms">842ms</text>
+  <!-- retrieval -->
+  <text x="92" y="356" class="mono txt">retrieval</text>
+  <rect x="220" y="346" width="88" height="13" rx="3" fill="#f5a623" opacity="0.7"/>
+  <text x="470" y="356" class="mono ms">286ms</text>
+  <!-- underwrite -->
+  <text x="92" y="390" class="mono txt">underwrite</text>
+  <rect x="220" y="380" width="151" height="13" rx="3" fill="#f5a623" opacity="0.7"/>
+  <text x="470" y="390" class="mono ms">488ms</text>
+  <!-- model.call -->
+  <text x="112" y="424" class="mono txt">model.call</text>
+  <rect x="240" y="414" width="120" height="13" rx="3" fill="#f5a623" opacity="0.55"/>
+  <text x="470" y="424" class="mono ms">388ms</text>
+  <!-- guardrail -->
+  <circle cx="78" cy="454" r="4" fill="#ffb84d"/>
+  <text x="92" y="458" class="mono txt">guardrail</text>
+  <rect x="220" y="448" width="36" height="13" rx="3" fill="#f5a623" opacity="0.7"/>
+  <text x="470" y="458" class="mono ms">118ms</text>
+
+  <!-- tree guides -->
+  <path d="M80,326 V458" stroke="#3a3f4a" stroke-width="1"/>
+  <path d="M80,352 H90 M80,386 H90 M80,454 H90" stroke="#3a3f4a" stroke-width="1"/>
+  <path d="M100,386 V420 H110" stroke="#3a3f4a" stroke-width="1"/>
+
+  <rect x="70" y="498" width="420" height="104" rx="10" fill="#1c2027" stroke="#2b3038"/>
+  <text x="86" y="524" class="muted">• Sampled (e.g. 10%) — fine for averages, not for "did THIS one happen"</text>
+  <text x="86" y="548" class="muted">• Short retention (days) — built for live debugging, not archives</text>
+  <text x="86" y="572" class="muted">• Mutable / ephemeral — not a source of legal truth</text>
+  <text x="86" y="592" class="muted">• Best at: latency, call tree, the exact line that errored</text>
+
+  <!-- ===================== RIGHT: AUDIT LOG ===================== -->
+  <rect x="560" y="200" width="480" height="430" rx="14" fill="#16191f" stroke="#2b3038"/>
+  <rect x="560" y="200" width="6" height="430" rx="3" fill="#3ddc84"/>
+  <text x="590" y="234" class="h-green">▣ AUDIT LOG</text>
+  <text x="590" y="258" class="meta">append-only · hash-chained · complete · lives years · read by auditors</text>
+  <text x="590" y="278" class="meta">Q: what was decided, and can we prove it wasn't changed?</text>
+
+  <!-- chain records -->
+  <g>
+    <rect x="610" y="300" width="400" height="44" rx="8" fill="#1c2027" stroke="#2b3038"/>
+    <text x="626" y="320" class="mono txt" fill="#cfe9d8">decision.approved</text>
+    <text x="626" y="336" class="mono meta">prev← sha256:9f2a…b1</text>
+  </g>
+  <path d="M810,344 V356" stroke="#3ddc84" stroke-width="1.5" marker-end="url(#cyan)"/>
+  <g>
+    <rect x="610" y="358" width="400" height="44" rx="8" fill="#1c2027" stroke="#2b3038"/>
+    <text x="626" y="378" class="mono txt" fill="#cfe9d8">guardrail.passed</text>
+    <text x="626" y="394" class="mono meta">prev← sha256:c70d…4e</text>
+  </g>
+  <path d="M810,402 V414" stroke="#3ddc84" stroke-width="1.5" marker-end="url(#cyan)"/>
+  <g>
+    <rect x="610" y="416" width="400" height="44" rx="8" fill="#1c2027" stroke="#2b3038"/>
+    <text x="626" y="436" class="mono txt" fill="#cfe9d8">model.version=v3.2</text>
+    <text x="626" y="452" class="mono meta">prev← sha256:18aa…9c</text>
+  </g>
+  <path d="M810,460 V472" stroke="#3ddc84" stroke-width="1.5" marker-end="url(#cyan)"/>
+  <g>
+    <rect x="610" y="474" width="400" height="44" rx="8" fill="#1c2027" stroke="#2b3038"/>
+    <text x="626" y="494" class="mono txt" fill="#cfe9d8">pii.redacted</text>
+    <text x="626" y="510" class="mono meta">prev← sha256:b3f1…77</text>
+  </g>
+
+  <text x="610" y="548" class="mono" fill="#3ddc84" font-size="13">🔒 chain verified · 0 gaps</text>
+  <text x="610" y="574" class="muted">• Complete (100%) — every decision, no sampling</text>
+  <text x="610" y="594" class="muted">• Survives a DBA with write access — alter one record, the chain breaks</text>
+  <text x="610" y="614" class="muted">• Best at: compliance, provenance, "prove it happened"</text>
+
+  <!-- link between the two -->
+  <path d="M256,454 C300,650 780,650 812,520" fill="none" stroke="#57e0c5" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <rect x="470" y="640" width="160" height="28" rx="14" fill="#10211d" stroke="#57e0c5"/>
+  <text x="550" y="659" text-anchor="middle" class="mono link">trace_id links them</text>
+
+  <text x="540" y="700" text-anchor="middle" class="sub">Pick by question, not by habit: debug → Trace · prove → Audit · both → link by trace_id</text>
+</svg>

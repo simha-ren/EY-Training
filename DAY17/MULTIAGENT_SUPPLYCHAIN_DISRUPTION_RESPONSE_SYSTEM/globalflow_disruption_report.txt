@@ -1,0 +1,13 @@
+SITUATION:
+Port of Rotterdam has declared force majeure due to a severe storm surge. Estimated closure is 18-24 hours and 340 containers are at risk of delay. SLA breach exposure begins within 6 hours.
+
+IMPACT:
+EU hub shipments are most affected. Likely consequences include customer delivery delay, carrier rescheduling pressure, and increased cross-border coordination workload. Cost exposure is elevated due to delay penalties and urgent rerouting.
+
+RESPONSE:
+Primary reroute recommendation is Antwerp because it minimizes delay with low operational risk. Secondary options are Hamburg and Felixstowe. Supplier communications should request 4-hour confirmation on revised movement plans. Compliance review should confirm customs handling and country-of-transit implications before execution.
+
+NEXT STEPS:
+1. Route Operations Owner: confirm Antwerp diversion decision within 1 hour.
+2. Supplier Communications Owner: send carrier and supplier notices within 2 hours.
+3. Compliance Owner: complete customs and sanctions review before dispatch release.

@@ -1,0 +1,11 @@
+Hypothesis/Objective:
+Check for missing timestamps/gaps
+
+Reasoning & Approach:
+Computed median interval 746 ms and gaps: 20
+
+Python Code/Action:
+check_time_continuity(df)
+
+Interpretation Guide:
+Large gaps indicate dropped samples or sensor pauses

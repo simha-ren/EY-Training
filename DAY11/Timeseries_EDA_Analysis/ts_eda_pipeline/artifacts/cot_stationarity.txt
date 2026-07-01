@@ -1,0 +1,11 @@
+Hypothesis/Objective:
+Run ADF and KPSS
+
+Reasoning & Approach:
+ADF null: unit root present; KPSS null: stationarity
+
+Python Code/Action:
+adfuller(series); kpss(series)
+
+Interpretation Guide:
+Use differencing/log if non-stationary

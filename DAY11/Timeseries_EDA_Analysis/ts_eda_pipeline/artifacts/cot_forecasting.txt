@@ -1,0 +1,11 @@
+Hypothesis/Objective:
+Forecast next 30s using ARIMA with holdout
+
+Reasoning & Approach:
+Select ARIMA by AIC on small grid and compute MAE/RMSE on holdout
+
+Python Code/Action:
+ARIMA(train, order=(p,d,q)).fit().forecast(steps)
+
+Interpretation Guide:
+MAE/RMSE indicate short-term predictive performance

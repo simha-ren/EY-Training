@@ -1,0 +1,10 @@
+company,zero_shot_summary,few_shot_summary,reference_summary,rouge_l_f1,rouge_l_precision,rouge_l_recall
+Northstar Payments,"- Northstar Payments reported material movement in revenue and operating metrics.
+- Management highlighted key risks and forward-looking expectations.","- Northstar Payments reported material movement in revenue and operating metrics.
+- Management highlighted key risks and forward-looking expectations.","Northstar Payments grew Q2 revenue 18% with stronger subscription revenue and margin expansion, while raising full-year guidance despite slower European enterprise sales.",0.1951,0.2222,0.1739
+Apex Cloud Retail,"- Apex Cloud Retail reported material movement in revenue and operating metrics.
+- Management highlighted key risks and forward-looking expectations.","- Apex Cloud Retail reported material movement in revenue and operating metrics.
+- Management highlighted key risks and forward-looking expectations.","Apex Cloud Retail increased revenue 9% and added customers, but margins fell because of logistics costs, discounts, and delivery investment.",0.3077,0.3158,0.3
+HelioSemis,"- HelioSemis reported material movement in revenue and operating metrics.
+- Management highlighted key risks and forward-looking expectations.","- HelioSemis reported material movement in revenue and operating metrics.
+- Management highlighted key risks and forward-looking expectations.","HelioSemis revenue declined 4% on weak consumer electronics demand, though automotive chips grew strongly and inventory improved ahead of a possible second-half recovery.",0.1463,0.1765,0.125

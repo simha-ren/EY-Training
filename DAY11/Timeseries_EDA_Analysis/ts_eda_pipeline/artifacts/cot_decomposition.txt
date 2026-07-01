@@ -1,0 +1,11 @@
+Hypothesis/Objective:
+Decompose into trend/seasonal/residual
+
+Reasoning & Approach:
+Estimated period=86
+
+Python Code/Action:
+STL or rolling mean
+
+Interpretation Guide:
+Trend shows long-term direction; residuals used for outlier detection

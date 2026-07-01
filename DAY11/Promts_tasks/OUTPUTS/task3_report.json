@@ -1,0 +1,18 @@
+{
+  "core_tasks_completed": [
+    "1. Zero-shot + few-shot earnings-call summarisation using LangChain PromptTemplate",
+    "3. Five-class ticket classifier with brief reasoning",
+    "4. Prompt logging and ROUGE-L scoring for summarisation"
+  ],
+  "model": "gemini-3.5-flash",
+  "sdk": "OpenAI Python SDK",
+  "provider": "Gemini via OpenAI-compatible endpoint",
+  "average_rouge_l_f1": 0.2164,
+  "ticket_classifier_accuracy": 1.0,
+  "outputs": [
+    "summarisation_results.csv",
+    "ticket_classifier_results.csv",
+    "promptlayer_log.jsonl",
+    "task3_report.json"
+  ]
+}
