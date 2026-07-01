@@ -14,7 +14,7 @@ openai>=1.30      # used for Groq (OpenAI-compatible) backend
 
 # --- Vector DB (retrieval-augmented answers) ---
 faiss-cpu>=1.7          # local vector store (default when present)
-# pinecone>=4.0          # uncomment to use Pinecone cloud vector DB
+pinecone>=4.0          # uncomment to use Pinecone cloud vector DB
 # sentence-transformers>=2.2  # optional: semantic embeddings for faiss/pinecone
 
 # File Processing
@@ -75,5 +75,7 @@ langsmith>=0.1
 # locust>=2.20        # pip install locust ; or use k6 (tests/load/k6.js)
 
 # --- Azure ops (optional; installed for Azure deployment) ---
-# azure-monitor-opentelemetry>=1.6     # Application Insights observability
-# azure-communication-email>=1.0       # email notifications
+azure-monitor-opentelemetry>=1.6     # Application Insights observability
+azure-communication-email>=1.0       # email notifications
+azure-servicebus>=7.11               # async job queue (worker.py)
+azure-identity>=1.16                 # managed-identity auth for Service Bus/ACR

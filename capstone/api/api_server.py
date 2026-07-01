@@ -152,10 +152,14 @@ async def pipeline_submit(request: PipelineRequest, background_tasks: Background
     the finished investigation automatically.
     """
     from core.job_store import JobStore
+    from core import servicebus
     store = JobStore()
     job_id = store.submit(request.query, request.context)
+    if servicebus.is_enabled() and servicebus.enqueue_job(job_id, request.query, request.context):
+        # A separate worker (worker.py) will process it from the queue.
+        return {"status": "accepted", "job_id": job_id, "dispatch": "servicebus"}
     background_tasks.add_task(_run_pipeline_job, job_id, request.query, request.context)
-    return {"status": "accepted", "job_id": job_id}
+    return {"status": "accepted", "job_id": job_id, "dispatch": "background"}
 
 
 @app.get("/api/v1/pipeline/jobs")

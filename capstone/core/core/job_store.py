@@ -55,6 +55,16 @@ class JobStore:
             )
         return job_id
 
+    def ensure(self, job_id: str, task: str = "", context: str = "", status: str = "queued"):
+        """Insert a job row with a known id if it doesn't already exist."""
+        now = time.time()
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO jobs (id, task, context, status, created_at, updated_at, result)"
+                " VALUES (?,?,?,?,?,?,?)",
+                (job_id, task, context, status, now, now, None),
+            )
+
     def set_status(self, job_id: str, status: str):
         with self._connect() as conn:
             conn.execute("UPDATE jobs SET status=?, updated_at=? WHERE id=?",

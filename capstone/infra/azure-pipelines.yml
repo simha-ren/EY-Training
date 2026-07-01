@@ -33,9 +33,29 @@ stages:
           - task: PublishCodeCoverageResults@2
             inputs: { summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage.xml' }
 
-  # 2) Build image in ACR + deploy to App Service
-  - stage: BuildDeploy
+  # 2) Provision/refresh Azure platform (Monitor + ACR + Service Bus + App Service)
+  - stage: Infra
     dependsOn: Test
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: bicep
+        pool: { vmImage: $(vmImage) }
+        steps:
+          - task: AzureCLI@2
+            displayName: Deploy Bicep
+            inputs:
+              azureSubscription: $(AZURE_SUBSCRIPTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az deployment group create -g $(RESOURCE_GROUP) \
+                  -f deploy/azure/main.bicep \
+                  -p appName=$(imageName) imageTag=$(Build.BuildId) \
+                     adminPassword=$(ADMIN_PASSWORD) alertEmail=$(ALERT_EMAIL)
+
+  # 3) Build image in ACR + deploy to App Service
+  - stage: BuildDeploy
+    dependsOn: Infra
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
       - job: build_deploy
@@ -53,11 +73,18 @@ stages:
                   --image $(imageName):latest \
                   --file Dockerfile.azure .
           - task: AzureWebAppContainer@1
-            displayName: Deploy to Web App for Containers
+            displayName: Deploy web app
             inputs:
               azureSubscription: $(AZURE_SUBSCRIPTION)
               appName: $(AZURE_WEBAPP_NAME)
               containers: $(ACR_NAME).azurecr.io/$(imageName):$(Build.BuildId)
+          - task: AzureCLI@2
+            displayName: Restart worker (Service Bus consumer)
+            inputs:
+              azureSubscription: $(AZURE_SUBSCRIPTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: az webapp restart -g $(RESOURCE_GROUP) -n $(imageName)-worker
 
   # 3) Post-deploy load test (fails the pipeline on errors)
   - stage: LoadTest
