@@ -4,7 +4,7 @@ These are hermetic: monkeypatch removes any ambient API keys so the result is
 deterministic whether or not the host has CLAUDE_API_KEY / ANTHROPIC_API_KEY set.
 """
 import pytest
-from core.claude_llm import ClaudeLLMClient
+from core.core.claude_llm import ClaudeLLMClient
 
 CTX = "The subsidy is INR 5000 per hectare. MSP is INR 3846 per quintal."
 
