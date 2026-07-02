@@ -50,12 +50,16 @@ jobs:
 
       - name: Load test smoke
         run: |
-          python -m uvicorn api_server:app --host 127.0.0.1 --port 8001 \
+          python -m uvicorn api.api_server:app --host 127.0.0.1 --port 8001 \
             > /tmp/proposalforge.log 2>&1 &
           # Wait for the server to accept connections (max ~30s).
           for i in $(seq 1 30); do
             curl -fsS http://127.0.0.1:8001/health && break || sleep 1
           done
+          # If it never came up, surface the server log and fail loudly.
+          if ! curl -fsS http://127.0.0.1:8001/health >/dev/null 2>&1; then
+            echo "::error::API server did not start"; cat /tmp/proposalforge.log; exit 1
+          fi
           locust -f tests/load/locustfile.py --headless \
             --host http://127.0.0.1:8001 -u 5 -r 1 -t 20s --only-summary \
             --exit-code-on-error 1
