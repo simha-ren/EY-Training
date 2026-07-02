@@ -1,6 +1,6 @@
 import os
 os.environ["VECTOR_BACKEND"] = "tfidf"  # deterministic, no heavy deps
-from core.retriever import chunk_text, TfidfRetriever, get_retriever
+from core.core.retriever import chunk_text, TfidfRetriever, get_retriever
 
 DOCS = [
     {"id": "1", "name": "millet.md",
