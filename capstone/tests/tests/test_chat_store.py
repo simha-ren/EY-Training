@@ -1,6 +1,6 @@
 """Chat sessionization tests."""
 import tempfile
-from core.chat_store import ChatStore
+from core.core.chat_store import ChatStore
 
 
 def _store():
