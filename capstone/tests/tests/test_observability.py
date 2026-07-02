@@ -1,5 +1,5 @@
 """Tests for observability helpers."""
-from core.observability import (track_agent, set_run_id, get_run_id,
+from core.core.observability import (track_agent, set_run_id, get_run_id,
                                 metrics_payload, record_guardrail, record_quality_score)
 
 
