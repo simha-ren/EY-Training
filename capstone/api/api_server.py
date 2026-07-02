@@ -227,6 +227,9 @@ async def upload_document(file: UploadFile = File(...), user_id: str = "api_user
             "uploaded_at": datetime.now().isoformat()
         }
     
+    except HTTPException:
+        # Client errors (e.g. unsupported file type) must keep their status.
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
