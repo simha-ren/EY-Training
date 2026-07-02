@@ -1,4 +1,4 @@
-from core.metrics import (compute_groundedness, compute_usefulness,
+from core.core.metrics import (compute_groundedness, compute_usefulness,
                           compute_accuracy, evaluate_answer, extractive_answer)
 
 CTX = ("The scheme gives a subsidy of INR 5000 per hectare to enrolled farmers. "
