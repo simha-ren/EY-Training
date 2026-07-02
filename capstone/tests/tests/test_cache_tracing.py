@@ -1,8 +1,8 @@
 """Retrieval cache/latency + tracing fallback tests."""
 import os
 os.environ["VECTOR_BACKEND"] = "tfidf"
-from core.retriever import get_retriever
-from core.tracing import get_tracer
+from core.core.retriever import get_retriever
+from core.core.tracing import get_tracer
 
 DOCS = [{"id": "1", "name": "d.md", "text": "Subsidy INR 5000 per hectare. Risk: low awareness. " * 5}]
 
