@@ -1,6 +1,6 @@
 """Auth + sessionization tests."""
 import tempfile
-from core.auth import AuthStore
+from core.core.auth import AuthStore
 
 
 def _store():
