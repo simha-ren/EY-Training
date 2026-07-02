@@ -28,12 +28,26 @@ os.environ["VECTOR_BACKEND"] = "tfidf"  # deterministic, no heavy deps
 os.environ["LANGCHAIN_TRACING_V2"] = "false"
 
 
+def _load_app():
+    """Import the FastAPI `app` without depending on the root api_server.py shim.
+
+    The real implementation lives in api/api_server.py (importable as
+    `api.api_server`). A root-level `api_server.py` shim may also exist, but we
+    don't rely on it being present, so tests pass regardless of what's committed.
+    """
+    try:
+        from api.api_server import app
+        return app
+    except ModuleNotFoundError:
+        import api_server  # fallback to the compatibility shim
+        return api_server.app
+
+
 @pytest.fixture(scope="session")
 def client():
     """A FastAPI TestClient bound to the real application."""
     from fastapi.testclient import TestClient
-    import api_server
-    with TestClient(api_server.app) as c:
+    with TestClient(_load_app()) as c:
         yield c
 
 
