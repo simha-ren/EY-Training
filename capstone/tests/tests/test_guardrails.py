@@ -1,5 +1,5 @@
 """Tests for guardrails + PII redaction."""
-from core.guardrails import Guardrails, redact_pii
+from core.core.guardrails import Guardrails, redact_pii
 
 
 def test_run_all_checks_returns_results():
