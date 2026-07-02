@@ -5,7 +5,7 @@ import importlib
 def test_noop_when_unconfigured(monkeypatch):
     for k in ("ACS_CONNECTION_STRING", "ACS_SENDER", "NOTIFY_EMAIL_TO", "NOTIFY_WEBHOOK_URL"):
         monkeypatch.delenv(k, raising=False)
-    import core.notifications as N
+    import core.core.notifications as N
     importlib.reload(N)
     assert N.get_notifier().provider == "none"
     assert N.get_notifier().notify("e", "t", "m") is False
