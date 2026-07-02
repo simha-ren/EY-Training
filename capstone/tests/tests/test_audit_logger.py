@@ -1,5 +1,5 @@
 import tempfile, os
-from core.audit_logger import AuditLogger, AuditAction
+from core.core.audit_logger import AuditLogger, AuditAction
 
 def _logger():
     return AuditLogger(db_path=tempfile.mktemp(suffix=".db"))
