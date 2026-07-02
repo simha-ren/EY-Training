@@ -1,6 +1,6 @@
 """Tests for the webhook job store (cross-process channel)."""
 import tempfile
-from core.job_store import JobStore
+from core.core.job_store import JobStore
 
 
 def _store():
