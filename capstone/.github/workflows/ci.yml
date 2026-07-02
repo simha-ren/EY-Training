@@ -25,15 +25,27 @@ jobs:
           cd capstone
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+<<<<<<< HEAD
           pip install pytest coverage
+=======
+          pip install pytest coverage locust
+>>>>>>> 22073dc (Restructure project into capstone layout and update CI)
 
       - name: Run tests
         run: |
           cd capstone
-          python -m pytest tests -q
+          python -m pytest tests/tests -q
 
       - name: Coverage
         run: |
           cd capstone
-          coverage run --source=core -m pytest tests -q
+          coverage run --source=core -m pytest tests/tests -q
           coverage report
+
+      - name: Load test smoke
+        run: |
+          cd capstone
+          python -m pip install uvicorn fastapi
+          python -m uvicorn api.api_server:app --host 127.0.0.1 --port 8001 > /tmp/proposalforge.log 2>&1 &
+          sleep 10
+          locust -f tests/tests/load/locustfile.py --headless --host http://127.0.0.1:8001 -u 2 -r 1 -t 20s --only-summary
