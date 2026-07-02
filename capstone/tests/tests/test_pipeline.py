@@ -2,10 +2,10 @@
 import os
 os.environ["VECTOR_BACKEND"] = "tfidf"
 import pytest
-from core.retriever import get_retriever
-from core.pipeline import run_pipeline
-from core.ragas_eval import evaluate_ragas, quality_gate
-from core.observability import metrics_payload, track_agent
+from core.core.retriever import get_retriever
+from core.core.pipeline import run_pipeline
+from core.core.ragas_eval import evaluate_ragas, quality_gate
+from core.core.observability import metrics_payload, track_agent
 
 DOCS = [
     {"filename": "millet.md", "document_id": "d1", "metadata": {"extension": ".md"},
