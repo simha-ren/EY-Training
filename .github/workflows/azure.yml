@@ -7,15 +7,24 @@ on:
 
 env:
   IMAGE_NAME: proposalforge
+  REQUIRE_AUTH: "false"
+  VECTOR_BACKEND: "tfidf"
+  LANGCHAIN_TRACING_V2: "false"
 
 jobs:
   # 1) Unit + integration tests (must pass before build)
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: capstone
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+          cache-dependency-path: capstone/requirements.txt
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
@@ -41,12 +50,14 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
       - name: Build & push image to ACR
+        # Build context is the capstone/ folder; Dockerfile lives inside it.
         run: |
           az acr build \
             --registry ${{ secrets.ACR_NAME }} \
             --image ${{ env.IMAGE_NAME }}:${{ github.sha }} \
             --image ${{ env.IMAGE_NAME }}:latest \
-            --file Dockerfile.azure .
+            --file capstone/Dockerfile.azure \
+            capstone
       - name: Deploy to Web App for Containers
         uses: azure/webapps-deploy@v3
         with:
@@ -58,12 +69,22 @@ jobs:
     needs: build-deploy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: capstone
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
+        with:
+          python-version: "3.12"
       - name: Install Locust
         run: pip install locust
+      - name: Wait for the site to be healthy
+        run: |
+          URL="https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net/health"
+          for i in $(seq 1 40); do
+            curl -fsS "$URL" && break || sleep 5
+          done
       - name: Smoke load test (fails on error rate)
         run: |
           locust -f tests/load/locustfile.py \
