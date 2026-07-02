@@ -13,9 +13,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: capstone
     steps:
       - uses: actions/checkout@v4
 
@@ -25,14 +22,18 @@ jobs:
 
       - name: Install dependencies
         run: |
+          cd capstone
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest coverage
 
       - name: Run tests
-        run: python -m pytest tests -q
+        run: |
+          cd capstone
+          python -m pytest tests -q
 
       - name: Coverage
         run: |
+          cd capstone
           coverage run --source=core -m pytest tests -q
           coverage report
