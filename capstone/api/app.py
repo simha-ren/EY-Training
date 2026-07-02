@@ -264,7 +264,7 @@ with tab_eval:
     st.caption("Offline metric proxies on a golden set (doc Section 7). "
                "Targets: routing ≥0.95 · context recall ≥0.90 · citation coverage ≥0.95.")
     if st.button("Run evaluation"):
-        from eval.evaluate import run_eval
+        from capstone.eval.evaluate import run_eval
         res = run_eval(engine)
         s = res["summary"]
         c1, c2, c3, c4 = st.columns(4)
