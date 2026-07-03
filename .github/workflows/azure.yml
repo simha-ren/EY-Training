@@ -48,10 +48,13 @@ jobs:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: capstone
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check required secrets are present
+      - name: Check secrets and Dockerfile are present
         env:
           ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
           ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
@@ -61,6 +64,11 @@ jobs:
           [ -z "$ACR_LOGIN_SERVER" ] && { echo "::error::ACR_LOGIN_SERVER missing"; m=1; } || echo "ACR_LOGIN_SERVER present"
           [ -z "$ACR_USERNAME" ] && { echo "::error::ACR_USERNAME missing"; m=1; } || echo "ACR_USERNAME present"
           [ -z "$ACR_PASSWORD" ] && { echo "::error::ACR_PASSWORD missing"; m=1; } || echo "ACR_PASSWORD present (len ${#ACR_PASSWORD})"
+          if [ ! -s Dockerfile.azure ]; then
+            echo "::error::capstone/Dockerfile.azure is missing or empty in the repo — commit it."; m=1
+          else
+            echo "Dockerfile.azure present ($(wc -c < Dockerfile.azure) bytes)"
+          fi
           exit $m
 
       - name: Log in to Azure Container Registry
@@ -73,10 +81,10 @@ jobs:
       - name: Build and push image
         run: |
           BASE="${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}"
-          docker build -f capstone/Dockerfile.azure \
+          docker build -f Dockerfile.azure \
             -t "$BASE:${{ github.sha }}" \
             -t "$BASE:latest" \
-            capstone
+            .
           docker push "$BASE:${{ github.sha }}"
           docker push "$BASE:latest"
 
