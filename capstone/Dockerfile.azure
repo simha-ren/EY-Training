@@ -1,0 +1,74 @@
+# syntax=docker/dockerfile:1
+# ---------------------------------------------------------------------------
+# ProposalForge Pro — production image for Azure Web App for Containers.
+#
+# One exposed port (8080). Inside, nginx multiplexes:
+#   /            -> Streamlit UI      (127.0.0.1:8501)
+#   /api, /health, /metrics -> FastAPI API (127.0.0.1:8001)
+#
+# App Service routes a single port, hence the nginx front. Runs as non-root.
+# ---------------------------------------------------------------------------
+
+# ---- Stage 1: build wheels for a clean, cache-friendly install --------------
+FROM python:3.12-slim AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /wheels
+COPY requirements.txt .
+RUN python -m pip install --upgrade pip && \
+    pip wheel --wheel-dir /wheels -r requirements.txt
+
+
+# ---- Stage 2: runtime -------------------------------------------------------
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app \
+    APP_HOME=/app \
+    WEBSITES_PORT=8080
+
+# nginx for port multiplexing; tini for clean signal handling.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends nginx tini curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python deps from the prebuilt wheels.
+COPY --from=builder /wheels /wheels
+COPY requirements.txt .
+RUN pip install --no-index --find-links /wheels -r requirements.txt && \
+    rm -rf /wheels
+
+WORKDIR /app
+
+# Application code and data.
+COPY core/ ./core/
+COPY api/ ./api/
+COPY domains/ ./domains/
+COPY data/ ./data/
+COPY .streamlit/ ./.streamlit/
+COPY api_server.py ./api_server.py
+
+# nginx config + entrypoint.
+COPY deploy/azure/nginx.conf /etc/nginx/nginx.conf
+COPY deploy/azure/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# --- Non-root user; give it ownership of the dirs it must write to. ----------
+RUN useradd --create-home --uid 10001 appuser && \
+    mkdir -p /app/data /app/logs /app/temp && \
+    # nginx needs to write pid/temp dirs under a non-root user:
+    mkdir -p /var/lib/nginx /var/log/nginx /run && \
+    chown -R appuser:appuser /app /var/lib/nginx /var/log/nginx /run /etc/nginx
+USER appuser
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8080/health || exit 1
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["/entrypoint.sh"]
