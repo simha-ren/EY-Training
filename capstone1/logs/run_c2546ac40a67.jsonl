@@ -1,0 +1,5 @@
+{"event": "agent_complete", "agent": "intake", "status": "ok", "latency_s": 0.0, "run_id": "c2546ac40a67"}
+{"event": "agent_complete", "agent": "retrieval", "status": "ok", "latency_s": 0.263, "run_id": "c2546ac40a67"}
+{"event": "agent_complete", "agent": "research", "status": "ok", "latency_s": 0.0, "run_id": "c2546ac40a67"}
+{"event": "agent_complete", "agent": "report", "status": "ok", "latency_s": 0.0, "run_id": "c2546ac40a67"}
+{"event": "agent_complete", "agent": "evaluator", "status": "ok", "latency_s": 0.0, "run_id": "c2546ac40a67"}
