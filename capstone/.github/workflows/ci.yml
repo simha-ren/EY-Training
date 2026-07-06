@@ -1,65 +1,20 @@
 name: CI
-
-on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'capstone/**'
-      - '.github/workflows/ci.yml'
-  pull_request:
-    paths:
-      - 'capstone/**'
-      - '.github/workflows/ci.yml'
-
-# The app runs fully offline for tests (no LLM key needed); these env vars
-# guarantee no outbound calls and a deterministic retrieval backend.
-env:
-  REQUIRE_AUTH: "false"
-  VECTOR_BACKEND: "tfidf"
-  LANGCHAIN_TRACING_V2: "false"
-
+on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    # The application lives in the capstone/ subfolder; run every step there.
-    defaults:
-      run:
-        working-directory: capstone
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-          cache-dependency-path: capstone/requirements.txt
-
-      - name: Install dependencies
+        with: { python-version: "3.12" }
+      - name: Install
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest coverage locust
-
+          pip install pytest coverage
       - name: Run tests
         run: python -m pytest tests -q
-
       - name: Coverage
         run: |
-          coverage run --source=core -m pytest tests -q
+          coverage run --source=src -m pytest tests -q
           coverage report
-
-      - name: Load test smoke
-        run: |
-          python -m uvicorn api.api_server:app --host 127.0.0.1 --port 8001 \
-            > /tmp/proposalforge.log 2>&1 &
-          # Wait for the server to accept connections (max ~30s).
-          for i in $(seq 1 30); do
-            curl -fsS http://127.0.0.1:8001/health && break || sleep 1
-          done
-          # If it never came up, surface the server log and fail loudly.
-          if ! curl -fsS http://127.0.0.1:8001/health >/dev/null 2>&1; then
-            echo "::error::API server did not start"; cat /tmp/proposalforge.log; exit 1
-          fi
-          locust -f tests/load/locustfile.py --headless \
-            --host http://127.0.0.1:8001 -u 5 -r 1 -t 20s --only-summary \
-            --exit-code-on-error 1

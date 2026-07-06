@@ -1,0 +1,18 @@
+# Keep the build context small & the image clean
+env/
+venv/
+.venv/
+.git/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+logs/*.log
+temp/*
+data/uploads/*
+*.rar
+*.zip
+.env
+.env.*.local
+node_modules/

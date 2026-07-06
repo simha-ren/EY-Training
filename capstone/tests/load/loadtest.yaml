@@ -1,0 +1,20 @@
+# Azure Load Testing config (Locust-based) for the resource provisioned by Bicep
+# (Microsoft.LoadTestService/loadTests). Run it via the azure/load-testing GitHub
+# Action or `az load test create`, pointing at this file.
+#
+# Per-endpoint p95 budgets (health<50ms, retrieve<50ms, e2e<5s) are enforced inside
+# locustfile.py itself; the aggregate criteria below are Azure Load Testing's own
+# pass/fail gates for a cloud-scale run.
+version: v0.1
+testId: proposalforge-latency-load
+displayName: ProposalForge Pro - latency + load
+description: Health/retrieve/end-to-end mix with latency and error gates
+testType: Locust
+testPlan: locustfile.py
+engineInstances: 1
+autoStop:
+  errorPercentage: 90
+  timeWindow: 60
+failureCriteria:
+  - percentage(error) > 5
+  - p95(response_time_ms) > 5000

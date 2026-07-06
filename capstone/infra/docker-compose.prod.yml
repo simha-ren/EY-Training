@@ -18,6 +18,8 @@ services:
       - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
       - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-proposalforge}
+    # Tracing: set either the App Insights string (Azure Monitor) OR LangSmith above
+    - APPLICATIONINSIGHTS_CONNECTION_STRING=${APPLICATIONINSIGHTS_CONNECTION_STRING:-}
     # App is reached through nginx; bind app ports to localhost only.
     ports:
       - "127.0.0.1:8000:8000"

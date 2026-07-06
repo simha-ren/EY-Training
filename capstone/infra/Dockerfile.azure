@@ -1,44 +1,37 @@
-# Production image for Azure App Service (Web App for Containers).
-# Single exposed port (8080) — nginx multiplexes the Streamlit UI and FastAPI API.
-# Multi-stage, non-root, slim.
+# ---- ProposalForge Pro : single-container image for Azure Web App for Containers ----
+# Build from the REPO ROOT:  docker build -f infra/Dockerfile.azure -t proposalforge .
+# nginx (:8080, the port Azure routes to) multiplexes:
+#   /                          -> Streamlit UI (src/ui/app_prod.py)  @127.0.0.1:8000
+#   /api/ , /health , /metrics -> FastAPI (src/api/api_server.py)    @127.0.0.1:8001
+FROM python:3.11-slim
 
-# ---------- builder ----------
-FROM python:3.12-slim AS builder
-ENV PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1
-WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential && \
-    rm -rf /var/lib/apt/lists/*
-COPY requirements.txt .
-# CPU-only torch keeps the image smaller; sentence-transformers pulls it in.
-RUN python -m venv /opt/venv && \
-    /opt/venv/bin/pip install --upgrade pip && \
-    /opt/venv/bin/pip install -r requirements.txt
-
-# ---------- runtime ----------
-FROM python:3.12-slim AS runtime
 ENV PYTHONUNBUFFERED=1 \
-    PATH="/opt/venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    PIP_NO_CACHE_DIR=1 \
     PROMETHEUS_MULTIPROC_DIR=/tmp/pf_metrics \
-    WEBSITES_PORT=8080 \
-    STREAMLIT_SERVER_ENABLE_CORS=false \
-    STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false \
-    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+    WEBSITES_PORT=8080
+
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends nginx curl && \
-    rm -rf /var/lib/apt/lists/* && \
-    adduser --disabled-password --gecos "" appuser
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        nginx build-essential libpq-dev curl \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /opt/venv /opt/venv
-COPY . /app
-COPY deploy/nginx.app.conf /etc/nginx/nginx.conf
-COPY deploy/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh && \
-    mkdir -p /app/data /app/logs /tmp/pf_metrics /var/lib/nginx /var/log/nginx && \
-    chown -R appuser:appuser /app /tmp/pf_metrics /var/lib/nginx /var/log/nginx /etc/nginx
+# Python deps first (better layer caching)
+COPY requirements.txt .
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
-USER appuser
+# App source (whole repo; .dockerignore keeps it lean)
+COPY . .
+
+# nginx config + entrypoint from infra/deploy
+RUN cp infra/deploy/nginx.app.conf /etc/nginx/nginx.conf \
+    && chmod +x infra/deploy/entrypoint.sh \
+    && mkdir -p data logs temp "$PROMETHEUS_MULTIPROC_DIR" /var/log/nginx
+
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -fsS http://localhost:8080/health || exit 1
-ENTRYPOINT ["/entrypoint.sh"]
+
+CMD ["bash", "infra/deploy/entrypoint.sh"]

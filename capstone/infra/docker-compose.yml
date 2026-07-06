@@ -1,8 +1,8 @@
 services:
   proposalforge-pro:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: infra/Dockerfile
     container_name: proposalforge-pro
     ports:
     - 8000:8000
@@ -27,10 +27,12 @@ services:
     - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
     - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
     - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-proposalforge}
+    # Tracing: set either the App Insights string (Azure Monitor) OR LangSmith above
+    - APPLICATIONINSIGHTS_CONNECTION_STRING=${APPLICATIONINSIGHTS_CONNECTION_STRING:-}
     volumes:
-    - ./data:/app/data
-    - ./logs:/app/logs
-    - ./temp:/app/temp
+    - ../data:/app/data
+    - ../logs:/app/logs
+    - ../temp:/app/temp
     networks:
     - proposalforge-network
     restart: unless-stopped

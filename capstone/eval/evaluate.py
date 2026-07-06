@@ -17,8 +17,8 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
-from core.config import EVAL_DIR
-from core.engine import Engine
+from src.common.config import EVAL_DIR
+from src.orchestrator.engine import Engine
 
 
 def _context_recall(terms: List[str], context: str) -> float:
@@ -51,7 +51,7 @@ def run_eval(engine: Engine | None = None) -> Dict:
         recall = _context_recall(s.get("reference_terms", []), context)
         recall_sum += recall
 
-        from core.generation import compose
+        from src.agents.generation import compose
         ans = compose(s["user_input"], engine.domains[s["domain"]], retrieved, engine.llm)
         has_cite = len(ans.citations) > 0
         cite_ok += int(has_cite)

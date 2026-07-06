@@ -23,13 +23,13 @@ from statistics import mean
 
 os.environ.setdefault("VECTOR_BACKEND", "faiss")  # production-grade local ANN
 
-from core.file_processor import FileProcessor
-from core.retriever import get_retriever
-from core.metrics import evaluate_answer
-from core.ragas_eval import evaluate_ragas
-from core.guardrails import check_sensitive_request
-from core.llm_backend import get_llm_client
-from core.pipeline import run_pipeline
+from src.common.file_processor import FileProcessor
+from src.retrieval.retriever import get_retriever
+from src.common.metrics import evaluate_answer
+from src.retrieval.ragas_eval import evaluate_ragas
+from src.common.guardrails import check_sensitive_request
+from src.agents.llm_backend import get_llm_client
+from src.orchestrator.pipeline import run_pipeline
 
 # Non-sensitive questions (should be answered) + sensitive ones (must be blocked).
 QA_QUESTIONS = [

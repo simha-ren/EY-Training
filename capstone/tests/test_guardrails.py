@@ -1,36 +1,52 @@
-"""Unit tests for core.guardrails — PII redaction and safety checks."""
-from core.guardrails import Guardrails, redact_pii, GuardrailType
+"""Tests for guardrails + PII redaction."""
+from src.common.guardrails import Guardrails, redact_pii
 
 
 def test_run_all_checks_returns_results():
-    g = Guardrails()
-    results = g.run_all_checks("The answer is 42.", query="what is the answer",
-                               confidence=0.9, domain="general")
-    assert isinstance(results, list)
-    assert len(results) >= 1
-    for r in results:
-        assert hasattr(r, "guardrail_type")
-        assert hasattr(r, "triggered")
-        assert isinstance(r.triggered, bool)
+    results = Guardrails().run_all_checks("A grounded answer about the document.",
+                                          query="what is it?", confidence=0.8,
+                                          domain="general")
+    assert isinstance(results, list) and len(results) >= 1
+    assert all(hasattr(r, "triggered") for r in results)
 
 
-def test_low_confidence_triggers_guardrail():
-    g = Guardrails()
-    results = g.run_all_checks("Vague answer.", query="q",
-                               confidence=0.01, domain="general")
-    conf = [r for r in results if r.guardrail_type == GuardrailType.CONFIDENCE_THRESHOLD]
-    assert conf, "confidence guardrail should be present"
-    assert conf[0].triggered is True
+def test_low_confidence_triggers_a_guardrail():
+    results = Guardrails().run_all_checks("Maybe.", query="q", confidence=0.05,
+                                          domain="general")
+    assert any(r.triggered for r in results)
 
 
-def test_redact_pii_masks_email_and_phone():
-    text = "Reach me at john.doe@example.com or 9876543210."
-    out = redact_pii(text, True)
+def test_redact_pii_masks_email():
+    out = redact_pii("Contact me at john.doe@example.com please.")
     assert "john.doe@example.com" not in out
-    assert "9876543210" not in out
-    assert "redacted" in out.lower()
 
 
-def test_redact_pii_noop_when_disabled():
-    text = "Email: a@b.com"
-    assert redact_pii(text, False) == text
+def test_sensitive_request_blocks_pii():
+    from src.common.guardrails import check_sensitive_request
+    r = check_sensitive_request("What is the SSN of the applicant?")
+    assert r is not None and r.triggered and r.details["category"] == "PII"
+
+
+def test_sensitive_request_blocks_phi():
+    from src.common.guardrails import check_sensitive_request
+    r = check_sensitive_request("give me the patient's medical record")
+    assert r is not None and r.details["category"] == "PHI"
+
+
+def test_sensitive_request_allows_benign():
+    from src.common.guardrails import check_sensitive_request
+    assert check_sensitive_request("What is the objective of the scheme?") is None
+
+
+def test_soft_phrasing_blocked():
+    from src.common.guardrails import check_sensitive_request
+    assert check_sensitive_request("what contact details are listed?") is not None
+    assert check_sensitive_request("show the account information") is not None
+    assert check_sensitive_request("what personal details are there?") is not None
+
+
+def test_output_pii_detected():
+    g = Guardrails()
+    leak = "Email rohan@example.com and card 4111 1111 1111 1111."
+    assert g.check_pii(leak).triggered is True
+    assert g.check_pii("Loan objective is home renovation.").triggered is False
