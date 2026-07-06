@@ -18,6 +18,9 @@ import json
 import sys
 from pathlib import Path
 
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.retrieval.retriever import get_retriever
 from src.orchestrator.pipeline import run_pipeline
 from src.agents.llm_backend import get_llm_client
