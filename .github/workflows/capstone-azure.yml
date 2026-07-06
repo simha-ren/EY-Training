@@ -64,22 +64,24 @@ jobs:
         working-directory: capstone
     steps:
       - uses: actions/checkout@v4
-      - name: Azure login
-        uses: azure/login@v2
+      # No service principal: push with ACR admin creds, deploy with publish profile.
+      - name: Log in to ACR
+        uses: docker/login-action@v3
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: Build & push image to ACR
-        # Build context is capstone/ (working-directory); Dockerfile path is relative to it.
+          registry: ${{ secrets.ACR_NAME }}.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+      - name: Build & push image
         run: |
-          az acr build \
-            --registry ${{ secrets.ACR_NAME }} \
-            --image ${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            --image ${{ env.IMAGE_NAME }}:latest \
-            --file infra/Dockerfile.azure .
-      - name: Deploy to Web App for Containers
+          IMG=${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}
+          docker build -f infra/Dockerfile.azure -t $IMG:${{ github.sha }} -t $IMG:latest .
+          docker push $IMG:${{ github.sha }}
+          docker push $IMG:latest
+      - name: Deploy to Web App for Containers (publish profile)
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           images: ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
   # 3) Post-deploy load test with per-endpoint p95 thresholds (fails if breached)
