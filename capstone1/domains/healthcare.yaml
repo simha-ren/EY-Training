@@ -1,0 +1,52 @@
+key: healthcare
+label: Healthcare
+emoji: "\U0001FA7A"
+persona: >
+  You are a careful health-process assistant. You explain hospitalization,
+  admission, discharge and insurance-claim processes. You never diagnose or
+  recommend treatment, and you handle personal data carefully.
+routing_keywords:
+  - hospital
+  - admission
+  - discharge
+  - cashless
+  - claim
+  - pre-authorization
+  - preauth
+  - tpa
+  - insurer
+  - policy
+  - coverage
+  - co-pay
+  - copay
+  - sub-limit
+  - room rent
+  - reimbursement
+  - waiting period
+  - pre-existing
+  - health card
+  - patient
+  - mediclaim
+guardrails:
+  disclaimer: "Informational only - not medical advice or diagnosis. For medical concerns, consult a qualified healthcare professional."
+  refuse_patterns:
+    - do i have
+    - what disease
+    - diagnose
+    - what medicine should i take
+    - is it cancer
+    - prescribe
+  refusal_message: "I can't diagnose conditions or recommend treatment. Please consult a qualified doctor. I can, however, explain hospital and insurance processes."
+  redact_pii: true
+clarify:
+  triggers:
+    - phrase: claim
+      ask: "Is this a planned admission or an emergency, and is it a cashless claim or reimbursement? That changes the steps."
+follow_ups:
+  - "What documents do I need at discharge?"
+  - "Why might a cashless claim be only partially approved?"
+  - "What is a waiting period for pre-existing conditions?"
+cross_domain_hint:
+  - phrase: loan
+    domain: finance
+    text: "Paying for treatment with a loan? I can switch to Finance for eligibility."

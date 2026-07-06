@@ -1,0 +1,49 @@
+# Base stack: app + Prometheus + Grafana. Compose from repo root:
+#   docker compose -f infra/docker-compose.yml up -d --build
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile.azure
+    container_name: proposalforge-app
+    environment:
+      - REQUIRE_AUTH=${REQUIRE_AUTH:-true}
+      - VECTOR_BACKEND=${VECTOR_BACKEND:-tfidf}
+      - DATABASE_URL=${DATABASE_URL:-}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-proposalforge}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks: [pfnet]
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: proposalforge-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks: [pfnet]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: proposalforge-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on: [prometheus]
+    restart: unless-stopped
+    networks: [pfnet]
+
+networks:
+  pfnet:
+    driver: bridge

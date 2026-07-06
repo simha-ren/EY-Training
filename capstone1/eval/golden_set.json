@@ -1,0 +1,58 @@
+{
+  "samples": [
+    {
+      "user_input": "What government schemes give subsidies to farmers?",
+      "domain": "agriculture",
+      "expected_source": "govt_schemes.md",
+      "reference_terms": ["scheme", "subsidy", "farmer"]
+    },
+    {
+      "user_input": "How do I manage pests on my crops?",
+      "domain": "agriculture",
+      "expected_source": "crop_pest_advisory.md",
+      "reference_terms": ["pest", "crop", "advisory"]
+    },
+    {
+      "user_input": "What irrigation method suits sandy soil?",
+      "domain": "agriculture",
+      "expected_source": "soil_irrigation.md",
+      "reference_terms": ["soil", "irrigation", "water"]
+    },
+    {
+      "user_input": "Am I eligible for a home loan?",
+      "domain": "finance",
+      "expected_source": "loan_eligibility.md",
+      "reference_terms": ["loan", "eligibility", "income"]
+    },
+    {
+      "user_input": "What investment products are available?",
+      "domain": "finance",
+      "expected_source": "investment_products.md",
+      "reference_terms": ["investment", "product", "return"]
+    },
+    {
+      "user_input": "What are the regulatory requirements?",
+      "domain": "finance",
+      "expected_source": "regulatory_faq.md",
+      "reference_terms": ["regulatory", "compliance"]
+    },
+    {
+      "user_input": "How does the cashless claim process work?",
+      "domain": "healthcare",
+      "expected_source": "cashless_claims.md",
+      "reference_terms": ["cashless", "claim", "hospital"]
+    },
+    {
+      "user_input": "What is covered under my health policy?",
+      "domain": "healthcare",
+      "expected_source": "coverage_faq.md",
+      "reference_terms": ["coverage", "policy", "covered"]
+    },
+    {
+      "user_input": "What is the admission and discharge procedure?",
+      "domain": "healthcare",
+      "expected_source": "admission_discharge.md",
+      "reference_terms": ["admission", "discharge", "hospital"]
+    }
+  ]
+}

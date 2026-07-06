@@ -1,0 +1,44 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "title": "ProposalForge Pro",
+  "timezone": "",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {"from": "now-6h", "to": "now"},
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Pipeline latency p95 (s)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{
+        "expr": "histogram_quantile(0.95, rate(pf_pipeline_latency_seconds_bucket[5m]))",
+        "legendFormat": "p95"
+      }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Agent calls / min by status",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{
+        "expr": "sum by (status) (rate(pf_agent_calls_total[1m]) * 60)",
+        "legendFormat": "{{status}}"
+      }]
+    },
+    {
+      "type": "stat",
+      "title": "Guardrail hits (5m)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [{"expr": "increase(pf_guardrail_hits_total[5m])"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Requests / min",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [{
+        "expr": "sum(rate(pf_pipeline_latency_seconds_count[1m]) * 60)",
+        "legendFormat": "req/min"
+      }]
+    }
+  ]
+}

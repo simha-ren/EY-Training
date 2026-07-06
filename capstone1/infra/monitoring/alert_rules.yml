@@ -1,0 +1,28 @@
+groups:
+  - name: proposalforge
+    rules:
+      - alert: HighPipelineLatency
+        expr: histogram_quantile(0.95, rate(pf_pipeline_latency_seconds_bucket[5m])) > 30
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "95th percentile pipeline latency > 30s"}
+      - alert: GuardrailSpike
+        expr: increase(pf_guardrail_hits_total[5m]) > 10
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: "Guardrail hits spiking"}
+      - alert: AgentErrors
+        expr: increase(pf_agent_calls_total{status="error"}[5m]) > 3
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "Multiple agent errors"}
+      - alert: TooManyActiveRuns
+        expr: pf_active_runs > 20
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Too many concurrent pipeline runs"}
+      - alert: LowRagasFaithfulness
+        expr: pf_ragas_faithfulness < 0.5
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "RAGAS faithfulness below 0.5"}
