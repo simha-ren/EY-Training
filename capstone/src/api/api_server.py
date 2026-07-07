@@ -121,6 +121,13 @@ class RetrieveRequest(BaseModel):
     top_k: int = 4
 
 
+@app.get("/api/v1/status")
+async def system_status_endpoint():
+    """Live backend wiring (LLM connector, vector DB, tracing, Azure Monitor)."""
+    from src.common.diagnostics import system_status
+    return system_status()
+
+
 @app.post("/api/v1/retrieve")
 async def retrieve_only(request: RetrieveRequest):
     """Retrieval only — NO LLM call. Fast path used to measure retrieval latency
