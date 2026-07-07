@@ -29,5 +29,4 @@ reports/
 htmlcov/
 
 # Dev-only
-tests/
 *.ipynb
