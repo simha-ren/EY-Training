@@ -1443,7 +1443,7 @@ with tab7:
 
     if st.button("▶️ Run test suite", use_container_width=False):
         with st.spinner("Running pytest with coverage..."):
-            st.session_state.test_results = run_test_suite(str(Path(__file__).parent))
+            st.session_state.test_results = run_test_suite(str(Path(__file__).resolve().parents[2]))
 
     results = st.session_state.get("test_results")
     if not results:
