@@ -40,6 +40,35 @@ class Engine:
         self.store = KnowledgeStore()
         self.store.build(load_seed_corpus(), llm=self.llm)
         self.router = DomainRouter(self.domains, self.store)
+        # LangGraph pipeline (route -> guard -> retrieve -> generate -> suggest)
+        self._graph = None
+        try:
+            from src.orchestrator.graph import build_pipeline_graph
+            self._graph = build_pipeline_graph(self.router, self.domains, self.store, self.llm)
+        except Exception:
+            self._graph = None  # fall back to the procedural path below
+
+    def ask_graph(self, query: str, pinned: Optional[str] = None,
+                  confirmed_domain: Optional[str] = None) -> "Turn":
+        """Run the query through the compiled LangGraph and map to a Turn."""
+        if self._graph is None:
+            return self.ask(query, pinned, confirmed_domain)
+        final = self._graph.invoke({"query": query, "pinned": pinned,
+                                    "confirmed_domain": confirmed_domain})
+        st = final.get("status")
+        route = final.get("route")
+        if st in ("ask_domain",):
+            return Turn(query, route, status="ask_domain",
+                        domain=final.get("domain"), message=final.get("message", ""))
+        if st == "refuse":
+            return Turn(query, route, status="refuse", domain=final.get("domain"),
+                        message=final.get("message", ""), disclaimer=final.get("disclaimer", ""))
+        if st == "clarify":
+            return Turn(query, route, status="clarify", domain=final.get("domain"),
+                        message=final.get("message", ""))
+        return Turn(query, route, status="answer", domain=final.get("domain"),
+                    answer=final.get("answer"), disclaimer=final.get("disclaimer", ""),
+                    follow_ups=final.get("follow_ups", []), cross_hint=final.get("cross_hint"))
 
     # --------------------------------------------------------- knowledge ---
     def add_document(self, data: bytes, filename: str, domain: str) -> int:
@@ -90,8 +119,8 @@ class Engine:
         answer = compose(query, cfg, retrieved, self.llm)
         answer.text = guardrails.redact_pii(answer.text)
 
-        # 6) Suggestions.
-        fups = suggest.follow_ups(cfg, query, answer.text)
+        # 6) Suggestions — follow-ups grounded in the LAST question (LLM-driven).
+        fups = suggest.followups_from_last(self.llm, cfg, query, answer.text)
         hint = suggest.cross_domain_hint(cfg, query)
 
         return Turn(
