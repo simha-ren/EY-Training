@@ -12,13 +12,13 @@ import uuid
 from datetime import datetime
 
 # Import production modules
-from core.claude_llm import ClaudeLLMClient
-from core.file_processor import FileProcessor
-from core.audit_logger import AuditLogger, AuditAction
-from core.approval_workflow import ApprovalWorkflow
-from core.report_generator import ReportGenerator
-from core.guardrails import Guardrails
-from core.metrics import evaluate_answer
+from src.agents.claude_llm import ClaudeLLMClient
+from src.common.file_processor import FileProcessor
+from src.common.audit_logger import AuditLogger, AuditAction
+from src.orchestrator.approval_workflow import ApprovalWorkflow
+from src.common.report_generator import ReportGenerator
+from src.common.guardrails import Guardrails
+from src.common.metrics import evaluate_answer
 
 load_dotenv()
 
@@ -39,7 +39,7 @@ app.add_middleware(
 )
 
 # Initialize services
-from core.llm_backend import get_llm_client
+from src.agents.llm_backend import get_llm_client
 claude, LLM_BACKEND = get_llm_client()
 audit_logger = AuditLogger()
 approval_workflow = ApprovalWorkflow()
@@ -96,7 +96,7 @@ async def health_check():
 async def metrics():
     """Prometheus metrics exposition (scraped by Prometheus/Grafana)."""
     from fastapi import Response
-    from core.observability import metrics_payload
+    from src.common.observability import metrics_payload
     payload, content_type = metrics_payload()
     return Response(content=payload, media_type=content_type)
 
@@ -104,8 +104,8 @@ async def metrics():
 @app.post("/api/v1/pipeline/run")
 async def pipeline_run(request: PipelineRequest, user_id: str = "api_user"):
     """Run the multi-agent analysis pipeline over provided context (synchronous)."""
-    from core.pipeline import run_pipeline
-    from core.retriever import get_retriever
+    from src.orchestrator.pipeline import run_pipeline
+    from src.retrieval.retriever import get_retriever
     retriever = get_retriever()
     retriever.build(request.context, "api-doc", "api-document")
     documents = [{"filename": "api-document", "content": request.context,
@@ -114,11 +114,80 @@ async def pipeline_run(request: PipelineRequest, user_id: str = "api_user"):
     return {"success": True, "result": result}
 
 
+class RetrieveRequest(BaseModel):
+    query: str
+    context: Optional[str] = None
+    documents: Optional[List[Dict[str, Any]]] = None  # [{filename, content}]
+    top_k: int = 4
+
+
+@app.get("/api/v1/status")
+async def system_status_endpoint():
+    """Live backend wiring (LLM connector, vector DB, tracing, Azure Monitor)."""
+    from src.common.diagnostics import system_status
+    return system_status()
+
+
+@app.post("/api/v1/retrieve")
+async def retrieve_only(request: RetrieveRequest):
+    """Retrieval only — NO LLM call. Fast path used to measure retrieval latency
+    (target < 50ms with a local vector backend) and to power multi-doc search."""
+    from src.retrieval.retriever import get_retriever
+    retriever = get_retriever()
+    docs = request.documents or ([{"filename": "api-document", "content": request.context}]
+                                 if request.context else [])
+    if not docs:
+        raise HTTPException(status_code=400, detail="Provide 'context' or 'documents'.")
+    for i, d in enumerate(docs):
+        retriever.build(d.get("content", ""), d.get("document_id", f"doc-{i}"),
+                        d.get("filename", f"doc-{i}"))
+    hits = retriever.search(request.query, top_k=request.top_k)
+    return {"success": True, "backend": getattr(retriever, "backend", "unknown"),
+            "count": len(hits), "hits": hits}
+
+
+class MultiDocRequest(BaseModel):
+    query: str
+    documents: List[Dict[str, Any]]   # [{filename, content, document_id?}]
+
+
+@app.post("/api/v1/analyze/multi")
+async def analyze_multi(request: MultiDocRequest, user_id: str = "api_user"):
+    """Multi-document analysis using the configured LLM connector.
+
+    Builds one retriever across all supplied documents (namespace-isolated per
+    doc), runs the multi-agent pipeline over the combined corpus, and returns a
+    grounded, cross-document answer with per-source citations."""
+    from src.orchestrator.pipeline import run_pipeline
+    from src.retrieval.retriever import get_retriever
+    if not request.documents:
+        raise HTTPException(status_code=400, detail="Provide at least one document.")
+    retriever = get_retriever()
+    documents = []
+    for i, d in enumerate(request.documents):
+        did = d.get("document_id", f"doc-{i}")
+        content = d.get("content", "")
+        fname = d.get("filename", f"document-{i}")
+        retriever.build(content, did, fname)
+        documents.append({"filename": fname, "content": content,
+                          "metadata": {"extension": Path(fname).suffix or ".txt"},
+                          "document_id": did})
+    result = run_pipeline(documents, request.query, retriever=retriever, llm=claude)
+    try:
+        audit_logger.log(AuditAction.DOCUMENT_ANALYSIS, user_id, "api-session",
+                         document_id=f"multi:{len(documents)}",
+                         details={"documents": len(documents), "backend": LLM_BACKEND})
+    except Exception:
+        pass
+    return {"success": True, "backend": LLM_BACKEND,
+            "document_count": len(documents), "result": result}
+
+
 def _run_pipeline_job(job_id: str, task: str, context: str):
     """Background worker: run the pipeline and persist the result to the job store."""
-    from core.pipeline import run_pipeline
-    from core.retriever import get_retriever
-    from core.job_store import JobStore
+    from src.orchestrator.pipeline import run_pipeline
+    from src.retrieval.retriever import get_retriever
+    from src.orchestrator.job_store import JobStore
     store = JobStore()
     try:
         store.set_status(job_id, "running")
@@ -129,14 +198,14 @@ def _run_pipeline_job(job_id: str, task: str, context: str):
         result = run_pipeline(documents, task, retriever=retriever, llm=claude)
         store.set_result(job_id, result, status="done")
         try:
-            from core.notifications import notify_pipeline_complete
+            from src.common.notifications import notify_pipeline_complete
             notify_pipeline_complete(result)
         except Exception as e:
             print(f"notify failed: {e}")
     except Exception as e:
         store.set_result(job_id, {"error": str(e)}, status="error")
         try:
-            from core.notifications import get_notifier
+            from src.common.notifications import get_notifier
             get_notifier().notify("pipeline_error", "Pipeline failed",
                                   f"Job {job_id} errored: {e}", {"job_id": job_id})
         except Exception:
@@ -151,8 +220,8 @@ async def pipeline_submit(request: PipelineRequest, background_tasks: Background
     The dashboard polls /api/v1/pipeline/jobs (or the shared job store) and shows
     the finished investigation automatically.
     """
-    from core.job_store import JobStore
-    from core import servicebus
+    from src.orchestrator.job_store import JobStore
+    from src.common import servicebus
     store = JobStore()
     job_id = store.submit(request.query, request.context)
     if servicebus.is_enabled() and servicebus.enqueue_job(job_id, request.query, request.context):
@@ -165,7 +234,7 @@ async def pipeline_submit(request: PipelineRequest, background_tasks: Background
 @app.get("/api/v1/pipeline/jobs")
 async def pipeline_jobs(limit: int = 25):
     """List recent pipeline jobs (status + summary)."""
-    from core.job_store import JobStore
+    from src.orchestrator.job_store import JobStore
     jobs = JobStore().list(limit=limit)
     return {"success": True, "jobs": [{k: v for k, v in j.items() if k != "result"}
                                       for j in jobs]}
@@ -174,7 +243,7 @@ async def pipeline_jobs(limit: int = 25):
 @app.get("/api/v1/pipeline/jobs/{job_id}")
 async def pipeline_job(job_id: str):
     """Fetch one job including its full result."""
-    from core.job_store import JobStore
+    from src.orchestrator.job_store import JobStore
     job = JobStore().get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
@@ -227,9 +296,6 @@ async def upload_document(file: UploadFile = File(...), user_id: str = "api_user
             "uploaded_at": datetime.now().isoformat()
         }
     
-    except HTTPException:
-        # Client errors (e.g. unsupported file type) must keep their status.
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
