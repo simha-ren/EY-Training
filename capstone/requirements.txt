@@ -79,3 +79,6 @@ azure-monitor-opentelemetry>=1.6     # Application Insights observability
 azure-communication-email>=1.0       # email notifications
 azure-servicebus>=7.11               # async job queue (worker.py)
 azure-identity>=1.16                 # managed-identity auth for Service Bus/ACR
+langgraph>=0.2                       # agent orchestration (StateGraph pipeline)
+azure-ai-documentintelligence>=1.0  # PDF/doc layout, tables, figures (optional)
+pymupdf>=1.24                        # render PDF pages to images for visual analysis
