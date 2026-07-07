@@ -59,6 +59,41 @@ def follow_ups(cfg: DomainConfig, query: str, answer_text: str, limit: int = 3) 
     return base[:limit]
 
 
+def followups_from_last(llm, cfg: DomainConfig, query: str, answer_text: str,
+                        limit: int = 3) -> List[str]:
+    """Follow-up questions grounded in the LAST question and its answer.
+
+    Uses the online LLM to propose natural next questions; falls back to the
+    domain's curated follow-ups when the LLM is offline or returns nothing.
+    """
+    online = bool(getattr(llm, "online", False))
+    complete = getattr(llm, "complete", None)
+    if online and callable(complete) and (query or answer_text):
+        prompt = (
+            "You are helping a user explore a document. Based ONLY on their last "
+            "question and the answer given, suggest "
+            f"{limit} short, natural follow-up questions they are likely to ask "
+            "next. Each must be a standalone question under 12 words. "
+            "Return one per line, no numbering, no preamble.\n\n"
+            f"Last question: {query}\n"
+            f"Answer given: {answer_text[:1200]}\n"
+        )
+        try:
+            raw = complete(prompt)
+            if raw:
+                out = []
+                for line in raw.splitlines():
+                    s = line.strip().lstrip("-•*0123456789. ").strip()
+                    if len(s) > 4 and s.endswith("?") and s.lower() != (query or "").lower():
+                        out.append(s)
+                if out:
+                    return out[:limit]
+        except Exception:
+            pass
+    # Offline / fallback: curated domain follow-ups.
+    return follow_ups(cfg, query, answer_text, limit)
+
+
 def cross_domain_hint(cfg: DomainConfig, query: str) -> Optional[Dict[str, str]]:
     """Detect when the query implies a hop to another domain."""
     low = (query or "").lower()
