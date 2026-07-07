@@ -73,12 +73,15 @@ def run_test_suite(project_root: str, timeout: int = 180) -> Dict[str, Any]:
     junit = os.path.join(reports, "junit.xml")
     cov_json = os.path.join(reports, "coverage.json")
     py = sys.executable
+    # Ensure the subprocess can import the `src` package and find the tests,
+    # regardless of where Streamlit was launched from.
+    env = {**os.environ, "PYTHONPATH": project_root}
 
     try:
         proc = subprocess.run(
-            [py, "-m", "coverage", "run", "--source=core", "-m",
+            [py, "-m", "coverage", "run", "--source=src", "-m",
              "pytest", "tests", "-q", f"--junit-xml={junit}"],
-            cwd=project_root, capture_output=True, text=True, timeout=timeout,
+            cwd=project_root, capture_output=True, text=True, timeout=timeout, env=env,
         )
         output = (proc.stdout or "") + "\n" + (proc.stderr or "")
     except FileNotFoundError:
@@ -102,7 +105,7 @@ def run_test_suite(project_root: str, timeout: int = 180) -> Dict[str, Any]:
     # Coverage report (best effort).
     try:
         subprocess.run([py, "-m", "coverage", "json", "-o", cov_json, "-q"],
-                       cwd=project_root, capture_output=True, text=True, timeout=60)
+                       cwd=project_root, capture_output=True, text=True, timeout=60, env=env)
         if os.path.exists(cov_json):
             result["coverage"] = _parse_coverage(cov_json)
     except Exception:
