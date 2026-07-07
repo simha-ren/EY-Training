@@ -99,9 +99,9 @@ jobs:
         with: { python-version: "3.12" }
       - name: Resolve target host (fail early if the app name is empty)
         run: |
-          HOST="${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          HOST="proposalforge-app.azurewebsites.net"
           echo "Target host: $HOST"
-          if [ "${{ secrets.AZURE_WEBAPP_NAME }}" = "" ]; then
+          if [ "$HOST" = ".azurewebsites.net" ]; then
             echo "::error::AZURE_WEBAPP_NAME secret is empty. Set it (repo-level) to your web app name, e.g. proposalforge-app"
             exit 1
           fi
