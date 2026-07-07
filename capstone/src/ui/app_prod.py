@@ -20,6 +20,8 @@ from src.common.guardrails import Guardrails, redact_pii, check_sensitive_reques
 from src.common.metrics import compute_groundedness, compute_usefulness, evaluate_answer
 from src.retrieval.retriever import get_retriever
 from src.common.test_runner import run_test_suite
+from src.common.load_tester import run_load_test
+from src.common.diagnostics import system_status
 from src.orchestrator.pipeline import run_pipeline as run_agent_pipeline
 from src.orchestrator.job_store import JobStore
 from dotenv import load_dotenv
@@ -1497,6 +1499,86 @@ with tab7:
 
         with st.expander("Raw test output"):
             st.code(results.get("output", ""))
+
+    # ===== System status (observability / vector DB / LLM connector) =====
+    st.markdown("---")
+    st.markdown("## 🩺 System status (live backends)")
+    st.caption("Verifies what's actually wired on this running instance — "
+               "handy to confirm Azure OpenAI, Pinecone, and Azure Monitor end-to-end.")
+    if st.button("🔄 Refresh status"):
+        st.session_state.sys_status = system_status()
+    status = st.session_state.get("sys_status") or system_status()
+
+    def _badge(ok: bool) -> str:
+        return "🟢" if ok else "⚪"
+
+    llm, vec, tr, obs = (status["llm"], status["vector_db"],
+                         status["tracing"], status["observability"])
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("LLM connector", llm.get("backend", "—"),
+              help=f"online={llm.get('online')} model={llm.get('model')}")
+    c2.metric("Vector DB", vec.get("backend", "—"),
+              help=f"pinecone_key_set={vec.get('pinecone_key_set')}")
+    c3.metric("Tracing", tr.get("provider", "—"),
+              help=f"enabled={tr.get('enabled')}")
+    c4.metric("Azure Monitor", "on" if obs.get("azure_monitor") else "off")
+
+    st.markdown(
+        f"- {_badge(llm.get('online'))} **LLM connector:** `{llm.get('backend')}` "
+        f"(model `{llm.get('model')}`, online={llm.get('online')})\n"
+        f"- {_badge(vec.get('backend') not in (None,'unknown'))} **Vector DB:** "
+        f"`{vec.get('backend')}` — Pinecone key set: {vec.get('pinecone_key_set')}, "
+        f"index `{vec.get('index') or '—'}`\n"
+        f"- {_badge(tr.get('enabled'))} **Tracing/observability:** `{tr.get('provider')}` "
+        f"(enabled={tr.get('enabled')}) → traces flow to Azure Monitor when the App "
+        f"Insights connection string is set\n"
+        f"- {_badge(obs.get('azure_monitor'))} **Azure Monitor (App Insights):** "
+        f"{'connected' if obs.get('azure_monitor') else 'not configured'} · "
+        f"Prometheus metrics at `{obs.get('prometheus_metrics')}`"
+    )
+
+    # ===== Load test (live p50/p95/RPS vs budgets) =====
+    st.markdown("---")
+    st.markdown("## 🚀 Load test")
+    st.caption("Fires concurrent requests at the running API and measures latency "
+               "percentiles and sustained RPS against budgets: /health < 50ms, "
+               "/api/v1/retrieve < 50ms (retrieval only), end-to-end p95 < 5s. "
+               "(Sub-5ms is not possible for an LLM call — these are the real targets.)")
+    lc1, lc2, lc3 = st.columns(3)
+    base_url = lc1.text_input("Target API base URL",
+                              value=os.getenv("SELF_API_BASE", "http://127.0.0.1:8001"))
+    users = lc2.slider("Concurrent users", 1, 50, 10)
+    duration = lc3.slider("Duration (seconds)", 3, 60, 10)
+
+    if st.button("▶️ Run load test", use_container_width=False):
+        with st.spinner(f"Load testing {base_url} with {users} users for {duration}s..."):
+            st.session_state.load_results = run_load_test(base_url, users, duration)
+
+    lr = st.session_state.get("load_results")
+    if lr and lr.get("ok"):
+        agg = lr["aggregate"]
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("🔥 Sustained RPS", agg["total_rps"])
+        m2.metric("Total requests", agg["total_requests"])
+        m3.metric("Errors", agg["errors"])
+        m4.metric("Result", "PASS ✅" if agg["all_pass"] else "FAIL ❌")
+        st.dataframe(
+            [{"Endpoint": r["endpoint"], "RPS": r["rps"], "p50 (ms)": r["p50_ms"],
+              "p95 (ms)": r["p95_ms"], "max (ms)": r["max_ms"],
+              "Budget (ms)": r["budget_ms"], "Errors": r["errors"],
+              "Status": ("✅ " + r["status"]) if r["status"] == "PASS" else ("❌ " + r["status"])}
+             for r in lr["endpoints"]],
+            width='stretch', hide_index=True,
+        )
+        st.bar_chart({r["endpoint"]: r["p95_ms"] for r in lr["endpoints"]})
+        if agg["all_pass"]:
+            st.success(f"All latency budgets met · sustained {agg['total_rps']} req/s.")
+        else:
+            st.warning("Some endpoints exceeded their latency budget or returned errors.")
+    elif lr:
+        st.error(lr.get("error", "Load test failed."))
+    else:
+        st.info("Set a target and click **Run load test**. Defaults to this app's API.")
 
 st.markdown("---")
 st.markdown("""
