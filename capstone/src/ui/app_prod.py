@@ -1,4 +1,4 @@
-"""Production-grade Streamlit frontend with Claude LLM, file analysis, and approval workflow."""
+"""Production Streamlit frontend: LangGraph agentic RAG, Claude/Groq LLM, diagram-aware document analysis."""
 from __future__ import annotations
 
 import os
@@ -22,6 +22,7 @@ from src.retrieval.retriever import get_retriever
 from src.common.test_runner import run_test_suite
 from src.common.load_tester import run_load_test
 from src.common.diagnostics import system_status
+from src.common import doc_analysis
 from src.orchestrator.pipeline import run_pipeline as run_agent_pipeline
 from src.orchestrator.job_store import JobStore
 from dotenv import load_dotenv
@@ -31,8 +32,8 @@ load_dotenv()
 
 # Page config
 st.set_page_config(
-    page_title="ProposalForge Pro",
-    page_icon="🚀",
+    page_title="ProposalForge Agent",
+    page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -41,14 +42,24 @@ st.set_page_config(
 st.markdown("""
 <style>
     :root {
-        --primary-color: #1f6f6b;
-        --secondary-color: #2e5cb8;
-        --accent-color: #9a7b1f;
-        --success-color: #00A36D;
+        --primary-color: #0F9AA8;
+        --secondary-color: #16233B;
+        --accent-color: #E9950C;
+        --success-color: #2E9E6B;
         --danger-color: #DC143C;
-        --warning-color: #FF9500;
+        --warning-color: #E9950C;
     }
-    
+    /* Follow-up suggestion chips */
+    div[data-testid="stButton"] > button {
+        border-radius: 999px;
+        border: 1px solid #CFE0E3;
+    }
+    div[data-testid="stButton"] > button:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+    }
+    h1, h2, h3 { letter-spacing: 0.2px; }
+
     .main {
         padding: 2rem;
     }
@@ -198,9 +209,10 @@ if st.session_state.get("_perform_reset"):
 
 # Initialize services
 @st.cache_resource
-def get_services():
-    """Initialize all services."""
-    claude, backend = get_llm_client()
+def get_services(provider: str = "claude"):
+    """Initialize all services. Cached per provider, so switching the sidebar
+    selector rebuilds the LLM client for that provider (with auto-failover)."""
+    claude, backend = get_llm_client(provider)
     audit = AuditLogger()
     approval = ApprovalWorkflow()
     report_gen = ReportGenerator()
@@ -221,13 +233,46 @@ def compute_groundness(answer: str, context: str) -> float:
 
 
 # ===================== AUTHENTICATION / SESSIONIZATION =====================
-REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "true").lower() in ("1", "true", "yes")
+REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "false").lower() in ("1", "true", "yes")
+# How long a cached login stays valid in the browser (default 1 hour).
+_SESSION_TTL = int(os.getenv("SESSION_TTL_SECONDS", "3600"))
+COOKIE_NAME = "pf_session"
 
 
 @st.cache_resource
 def get_auth_store():
     from src.common.auth import AuthStore
     return AuthStore()
+
+
+@st.cache_resource
+def get_cookie_manager():
+    """Browser cookie manager used to remember the login token across refreshes."""
+    import extra_streamlit_components as stx
+    return stx.CookieManager(key="pf_cookie_mgr")
+
+
+def _read_cookie_token():
+    try:
+        return get_cookie_manager().get(COOKIE_NAME)
+    except Exception:
+        return None
+
+
+def _save_cookie_token(token: str):
+    from datetime import datetime, timedelta
+    try:
+        get_cookie_manager().set(COOKIE_NAME, token, key="pf_set_cookie",
+                                 expires_at=datetime.now() + timedelta(seconds=_SESSION_TTL))
+    except Exception:
+        pass
+
+
+def _clear_cookie_token():
+    try:
+        get_cookie_manager().delete(COOKIE_NAME, key="pf_del_cookie")
+    except Exception:
+        pass
 
 
 def _get_login_background_data_url() -> str:
@@ -380,6 +425,7 @@ def _render_login():
                 st.session_state.auth_user = u.strip().lower()
                 st.session_state.auth_token = token
                 st.session_state.user_id = u.strip().lower()
+                _save_cookie_token(token)   # remember across refresh
                 st.rerun()
             else:
                 st.error("Invalid username or password.")
@@ -399,13 +445,21 @@ def _render_login():
 
 
 def _current_user():
-    """Return the authenticated username, validating the session token."""
+    """Return the authenticated username, validating the session token.
+    Falls back to the browser cookie so a page refresh stays logged in."""
     if not REQUIRE_AUTH:
         return st.session_state.get("auth_user", "demo_user")
     token = st.session_state.get("auth_token")
+    if not token:
+        # Restore from the persisted cookie (survives refresh / reconnect).
+        token = _read_cookie_token()
+        if token:
+            st.session_state.auth_token = token
     if token:
         user = get_auth_store().validate_session(token)
         if user:
+            st.session_state.auth_user = user
+            st.session_state.user_id = user
             return user
     return None
 
@@ -437,11 +491,11 @@ def representative_excerpt(text: str, limit: int = 6000) -> str:
     return "\n\n".join(excerpt) or text[:limit]
 
 
-services = get_services()
+services = get_services(st.session_state.get("llm_provider", "Claude").lower())
 
 # ===== SIDEBAR =====
 with st.sidebar:
-    st.markdown("# 🚀 ProposalForge Pro")
+    st.markdown("# 🤖 ProposalForge Agent")
 
     # Signed-in user + logout
     if REQUIRE_AUTH and st.session_state.get("auth_user"):
@@ -452,13 +506,14 @@ with st.sidebar:
                 get_auth_store().end_session(st.session_state.get("auth_token"))
             except Exception:
                 pass
+            _clear_cookie_token()
             for k in ("auth_user", "auth_token"):
                 st.session_state.pop(k, None)
             st.rerun()
     st.markdown("---")
 
     st.markdown("## 📊 Dashboard")
-    
+
     # User info
     col1, col2 = st.columns(2)
     with col1:
@@ -544,18 +599,18 @@ with st.sidebar:
     # Help
     st.markdown("## ❓ Help")
     st.info("""
-    **ProposalForge Pro** helps you analyze documents with AI-powered insights.
+    **ProposalForge Agent** helps you analyze documents with AI-powered insights.
     
     1. Upload a document (PDF, DOCX, CSV, etc.)
     2. Ask questions about the content
     3. Review the analysis
-    4. Request approval
+    4. Explore with follow-up questions
     5. Download the report
     """)
 
 # ===== MAIN CONTENT =====
-st.markdown("# 🚀 ProposalForge Pro - Intelligent Document Analysis")
-st.markdown("### Powered by Claude AI | Production-Ready Analysis & Approval Workflow")
+st.markdown("# 🤖 ProposalForge Agent")
+st.markdown("#### Multi-domain proposal & document agent — LangGraph pipeline · Claude/Groq · diagram-aware")
 
 # One-time "fresh start" feedback after a reset.
 if st.session_state.pop("_just_reset", False):
@@ -568,8 +623,85 @@ if st.session_state.pop("_just_reset", False):
         pass
 
 # Create tabs
-_tabs = st.tabs(["📤 Upload & Analyze", "💬 Chat & Questions", "🤖 Agent Pipeline", "✅ Approval", "📊 Analytics", "🧾 Audit Logs", "📥 Export", "🧪 Tests & Coverage"])
-tab1, tab2, tab_pipeline, tab3, tab4, tab5, tab6, tab7 = _tabs
+_tabs = st.tabs(["🏠 Overview", "📚 Knowledge", "💬 Chat", "🤖 Agents", "📊 Analytics", "🧾 Activity", "📥 Export", "🧪 Evaluation"])
+tab_overview, tab1, tab2, tab_pipeline, tab4, tab5, tab6, tab7 = _tabs
+
+# ===== TAB: OVERVIEW (agent studio) =====
+with tab_overview:
+    agent_name = st.session_state.get("agent_name", "ProposalForge Agent")
+    hc1, hc2 = st.columns([3, 1])
+    with hc1:
+        st.markdown(f"### 🤖 {agent_name}")
+    with hc2:
+        _online = services["claude"].online
+        st.markdown(("🟢 **Ready**" if _online else "🟠 **Offline mode**"))
+    st.caption("Configure your agent on the left, and test it on the right — like a live agent studio.")
+    st.divider()
+
+    left, right = st.columns([1.25, 1], gap="large")
+
+    # ---------------- Details (left) ----------------
+    with left:
+        with st.container(border=True):
+            st.markdown("#### Details")
+            st.text_input("Name", value=agent_name, key="agent_name")
+            st.text_area("Description",
+                         value=st.session_state.get("agent_description",
+                               "Answers questions about your proposals and documents "
+                               "across Finance, Healthcare and Agriculture — grounded, "
+                               "cited, and safe."),
+                         key="agent_description", height=70)
+
+            st.markdown("**Select your agent's model**")
+            st.selectbox("Model", ["Claude", "Groq"], index=0, key="llm_provider",
+                         label_visibility="collapsed",
+                         help="The provider the agent uses. Falls back to the other "
+                              "provider, then offline, if a key is missing.")
+            st.caption(f"Active backend: `{services.get('backend','offline')}`")
+
+            st.markdown("**Instructions**")
+            st.text_area("Instructions",
+                         value=st.session_state.get("agent_instructions", ""),
+                         key="agent_instructions", height=110,
+                         label_visibility="collapsed",
+                         placeholder="Describe what you want this agent to do, its tone, "
+                                     "and rules. These guide every answer.")
+
+        with st.container(border=True):
+            st.markdown("#### Knowledge")
+            ndocs = len(st.session_state.documents)
+            st.caption("Add data, files and other resources to inform and improve "
+                       "AI-generated responses.")
+            st.markdown(f"📚 **{ndocs}** document(s) indexed · backend "
+                        f"`{st.session_state.get('retriever_backend','none')}`")
+            st.info("Open the **📚 Knowledge** tab to upload documents (PDF/DOCX/…) "
+                    "or scan diagrams & charts.")
+
+    # ---------------- Test your agent (right) ----------------
+    with right:
+        with st.container(border=True):
+            st.markdown("#### Test your agent")
+            greet = f"Hello, I'm {agent_name}. How can I help you today?"
+            with st.chat_message("assistant"):
+                st.write(greet)
+            # Show the running conversation (read-only mirror of the Chat tab).
+            for m in st.session_state.conversation_history[-6:]:
+                with st.chat_message(m["role"]):
+                    st.write(m["content"])
+            if not st.session_state.document_data:
+                st.caption("Add knowledge first, then ask a question here.")
+            oc1, oc2 = st.columns([4, 1])
+            with oc1:
+                _oq = st.text_input("Ask a question or describe what you need",
+                                    key="overview_chat_input",
+                                    label_visibility="collapsed",
+                                    placeholder="Ask a question or describe what you need")
+            with oc2:
+                _osend = st.button("➤", key="overview_send", use_container_width=True)
+            if _osend and _oq:
+                st.session_state.pending_query = _oq
+                st.rerun()
+
 
 # ===== TAB 1: UPLOAD & ANALYZE =====
 with tab1:
@@ -581,12 +713,18 @@ with tab1:
     with col1:
         uploaded_files = st.file_uploader(
             "Choose file(s)",
-            type=["pdf", "docx", "csv", "xlsx", "pptx", "txt", "md"],
+            type=["pdf", "docx", "csv", "xlsx", "pptx", "txt", "md", "png", "jpg", "jpeg"],
             accept_multiple_files=True,
             label_visibility="collapsed"
         )
     with col2:
         analyze_button = st.button("🔍 Analyze", width='stretch')
+    analyze_visuals = st.checkbox(
+        "🖼️ Also scan diagrams, charts & visualizations",
+        value=False,
+        help="Extracts text/tables via Azure Document Intelligence (if configured) "
+             "and describes architecture diagrams/graphs using the LLM's vision "
+             "(needs CLAUDE_API_KEY). PDFs and images are supported.")
 
     def _rebuild_index():
         """Rebuild the combined vector index over all uploaded documents."""
@@ -613,14 +751,34 @@ with tab1:
             if uploaded_file.name in existing_names:
                 continue  # skip duplicates already loaded
             try:
+                raw_bytes = bytes(uploaded_file.getbuffer())
                 temp_path = f"temp/{uploaded_file.name}"
                 Path(temp_path).parent.mkdir(exist_ok=True)
                 with open(temp_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+                    f.write(raw_bytes)
 
-                document_text = FileProcessor.extract_text(temp_path)
+                ext = os.path.splitext(uploaded_file.name)[1].lower()
+                is_image = ext in (".png", ".jpg", ".jpeg")
+                # Text: Azure Document Intelligence / local for docs; for images
+                # the visual description becomes the text.
+                if is_image:
+                    document_text = ""
+                else:
+                    document_text = FileProcessor.extract_text(temp_path)
                 file_metadata = FileProcessor.get_file_metadata(temp_path)
                 doc_id = str(uuid.uuid4())
+
+                # Optional: scan diagrams/charts/visuals (+ Azure DI text/tables).
+                visuals = {"available": False, "descriptions": []}
+                if analyze_visuals or is_image:
+                    da = doc_analysis.analyze_document(
+                        raw_bytes, uploaded_file.name, include_visuals=True)
+                    visuals = da.get("visuals", visuals)
+                    if not document_text:
+                        # use Azure DI text, or fold visual descriptions into text
+                        document_text = da.get("text") or "\n\n".join(
+                            f"[Figure p{d['page']}] {d['description']}"
+                            for d in visuals.get("descriptions", []))
 
                 services["audit"].log(
                     AuditAction.DOCUMENT_UPLOAD,
@@ -645,6 +803,7 @@ with tab1:
                     "document_id": doc_id,
                     "uploaded_at": datetime.now().isoformat(),
                     "analysis": analysis,
+                    "visuals": visuals,
                 })
                 added += 1
             except Exception as e:
@@ -749,6 +908,20 @@ with tab1:
                     st.write(f"• {insight}")
             else:
                 st.write(insights)
+
+        # Diagrams & visuals (when the document was scanned for visuals).
+        _vis = (st.session_state.document_data or {}).get("visuals", {})
+        if _vis:
+            st.markdown("### 🖼️ Diagrams & Visuals")
+            if _vis.get("descriptions"):
+                for d in _vis["descriptions"]:
+                    with st.expander(f"Figure / page {d.get('page','?')}"):
+                        st.write(d.get("description", ""))
+            elif _vis.get("available"):
+                st.caption("No meaningful diagrams detected on the scanned pages.")
+            else:
+                st.caption(_vis.get("note", "Enable diagram scanning and set "
+                           "CLAUDE_API_KEY to analyze visuals."))
 
         # Document info
         st.markdown("---")
@@ -858,6 +1031,11 @@ def process_query(user_query: str):
         convo = "\n".join(f"{m['role'].capitalize()}: {m['content'][:300]}" for m in recent)
         context = f"Conversation so far:\n{convo}\n\n---\nDocument context:\n{context}"
 
+    # Agent instructions (from the Overview studio) guide every answer.
+    _instr = (st.session_state.get("agent_instructions") or "").strip()
+    if _instr:
+        context = f"Agent instructions (follow these):\n{_instr}\n\n---\n{context}"
+
     st.session_state.conversation_history.append({"role": "user", "content": user_query})
 
     response = services["claude"].answer_question(
@@ -964,6 +1142,39 @@ def render_metrics_badges(metrics: dict, mode: str):
     m4.metric("Usefulness", f"{metrics.get('usefulness', 0):.0%}")
 
 
+def _followups_last(client, last_q, last_a, doc_snippet, limit=3):
+    """Follow-up questions grounded in the user's LAST question (online LLM).
+
+    Uses the live LLM connector; falls back to document-based suggestions only
+    when offline. This is the 'follow-ups based on the last question' behaviour.
+    """
+    online = bool(getattr(client, "online", False))
+    complete = getattr(client, "complete", None)
+    if online and callable(complete) and (last_q or last_a):
+        prompt = ("Based ONLY on the user's last question and the answer given, "
+                  f"suggest {limit} short natural follow-up questions the user is "
+                  "likely to ask next. Each under 12 words, ending with '?'. "
+                  "One per line, no numbering, no preamble.\n\n"
+                  f"Last question: {last_q}\nAnswer: {(last_a or '')[:1000]}\n")
+        try:
+            raw = client.complete(prompt)
+            if raw:
+                out = []
+                for ln in raw.splitlines():
+                    s = ln.strip().lstrip("-•*0123456789. ").strip()
+                    if len(s) > 4 and s.endswith("?") and s.lower() != (last_q or "").lower():
+                        out.append(s)
+                if out:
+                    return out[:limit]
+        except Exception:
+            pass
+    try:
+        raw = client.get_auto_suggestions(doc_snippet, last_q)
+        return [s for s in raw if check_sensitive_request(s) is None][:limit]
+    except Exception:
+        return []
+
+
 with tab2:
     if not st.session_state.document_data:
         st.info("📤 Please upload and analyze a document first.")
@@ -983,6 +1194,17 @@ with tab2:
         vb_label = {"faiss": "FAISS", "pinecone": "Pinecone", "qdrant": "Qdrant",
                     "pgvector": "pgvector", "tfidf": "TF-IDF", "none": "plain text"}.get(vb, vb)
         st.caption(f"Status: {mode_label}  ·  🔎 Retrieval: {vb_label}  ·  📚 {ndocs} document(s) indexed")
+
+        # Agent pipeline should run on a live LLM — say so clearly when it can't.
+        if not services["claude"].online:
+            st.warning("⚠️ No online LLM connected. Answers are extracted offline. "
+                       "Set **CLAUDE_API_KEY** or **GROQ_API_KEY** for live agent answers.")
+
+        # Greeting on a fresh conversation.
+        if not st.session_state.conversation_history:
+            with st.chat_message("assistant"):
+                st.write("Hey! 👋 How can I help you today? Ask me anything about "
+                         "your document(s), and I'll suggest follow-up questions as we go.")
 
         # Process any queued question (from the Send button or a suggestion chip).
         if st.session_state.get("pending_query"):
@@ -1006,21 +1228,22 @@ with tab2:
                     if message.get("metrics"):
                         render_metrics_badges(message["metrics"], message.get("mode", "claude"))
 
-        # Auto-suggestions (cached per turn so we don't recompute every rerun).
-        st.markdown("### 💡 Suggested Questions")
+        # Follow-up questions — driven by the LAST question asked (online LLM).
         turn_count = len(st.session_state.conversation_history)
         last_user_query = next(
             (m["content"] for m in reversed(st.session_state.conversation_history)
-             if m["role"] == "user"), ""
-        )
+             if m["role"] == "user"), "")
+        last_answer = next(
+            (m["content"] for m in reversed(st.session_state.conversation_history)
+             if m["role"] == "assistant"), "")
+        st.markdown("### 💡 Follow-up questions" if last_user_query
+                    else "### 💡 Try asking")
         if st.session_state.get("_sugg_turn") != turn_count:
-            raw_suggestions = services["claude"].get_auto_suggestions(
-                st.session_state.document_data["content"][:1000], last_user_query
-            )
-            # Never suggest questions that would request sensitive PII/PHI.
+            fups = _followups_last(
+                services["claude"], last_user_query, last_answer,
+                st.session_state.document_data["content"][:1000])
             st.session_state["_suggestions"] = [
-                s for s in raw_suggestions if check_sensitive_request(s) is None
-            ]
+                s for s in fups if check_sensitive_request(s) is None]
             st.session_state["_sugg_turn"] = turn_count
         suggestions = st.session_state.get("_suggestions", [])
 
@@ -1070,8 +1293,12 @@ def _risk_gauge_svg(score: int) -> str:
 
 with tab_pipeline:
     st.markdown("## 🤖 Multi-Agent Analysis Pipeline")
-    st.caption("Supervisor orchestrates Intake → Retrieval + Research → Report → "
-               "Evaluator (RAGAS gate). Runs in DEMO mode with zero API keys.")
+    st.caption("LangGraph orchestrates Route → Guardrails → Retrieve → Generate → "
+               "Suggest. Answers run on the live LLM connector when a key is set.")
+    if not services["claude"].online:
+        st.warning("⚠️ No online LLM connected — the pipeline will use offline "
+                   "extraction. Set **CLAUDE_API_KEY** or **GROQ_API_KEY** for live "
+                   "agent answers (not assumptions).")
 
     # ---- Webhook inbox: jobs submitted to the FastAPI webhook ----
     with st.expander("📨 Webhook inbox (jobs submitted via the API)", expanded=False):
@@ -1169,76 +1396,7 @@ with tab_pipeline:
                 file_name=f"investigation_{res['run_id']}.json",
                 mime="application/json")
 
-# ===== TAB 3: APPROVAL =====
-with tab3:
-    st.markdown("## ✅ Request Human Approval")
-    
-    if not st.session_state.document_data:
-        st.info("📤 Please upload and analyze a document first.")
-    elif not st.session_state.analysis_result:
-        st.info("🔍 Please complete the analysis first.")
-    else:
-        st.write("Review the analysis and request approval for report generation.")
-        
-        # Show analysis summary
-        st.markdown("### 📋 Analysis Summary")
-        analysis = st.session_state.analysis_result
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Objective", "✓" if analysis.get("objective") else "✗")
-        with col2:
-            challenges = analysis.get("challenges", [])
-            count = len(challenges) if isinstance(challenges, list) else 1
-            st.metric("Challenges Identified", count)
-        with col3:
-            solutions = analysis.get("proposed_solutions", [])
-            count = len(solutions) if isinstance(solutions, list) else 1
-            st.metric("Solutions Proposed", count)
-        
-        # Approval request form
-        st.markdown("### 📝 Approval Request Form")
-        
-        approval_name = st.text_input("Your Name (for approval record)")
-        approval_comments = st.text_area("Comments or notes")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("✅ Approve & Request Report", width='stretch'):
-                if not approval_name:
-                    st.error("Please enter your name")
-                else:
-                    # Create approval request
-                    request_id = services["approval"].create_request(
-                        st.session_state.document_data["document_id"],
-                        st.session_state.user_id,
-                        st.session_state.analysis_result
-                    )
-                    
-                    # Log approval request
-                    services["audit"].log(
-                        AuditAction.APPROVAL_REQUESTED,
-                        st.session_state.user_id,
-                        st.session_state.session_id,
-                        st.session_state.document_data["document_id"],
-                        {
-                            "request_id": request_id,
-                            "approver": approval_name,
-                            "comments": approval_comments
-                        }
-                    )
-                    
-                    st.session_state.approval_requested = True
-                    st.session_state.approval_status = "pending"
-                    
-                    st.success(f"✅ Approval requested! Request ID: {request_id[:12]}...")
-        
-        with col2:
-            if st.button("❌ Reject", width='stretch'):
-                st.error("Analysis rejected. Please upload a new document.")
-
-# ===== TAB 4: ANALYTICS =====
+# ===== TAB: ANALYTICS =====
 with tab4:
     st.markdown("## 📊 Analytics Dashboard")
 
@@ -1558,7 +1716,7 @@ with tab7:
     if lr and lr.get("ok"):
         agg = lr["aggregate"]
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("🔥 Sustained RPS", agg["total_rps"])
+        m1.metric("🔥 Peak RPS", agg["peak_rps"])
         m2.metric("Total requests", agg["total_requests"])
         m3.metric("Errors", agg["errors"])
         m4.metric("Result", "PASS ✅" if agg["all_pass"] else "FAIL ❌")
@@ -1572,7 +1730,7 @@ with tab7:
         )
         st.bar_chart({r["endpoint"]: r["p95_ms"] for r in lr["endpoints"]})
         if agg["all_pass"]:
-            st.success(f"All latency budgets met · sustained {agg['total_rps']} req/s.")
+            st.success(f"All latency budgets met · peak {agg['peak_rps']} req/s.")
         else:
             st.warning("Some endpoints exceeded their latency budget or returned errors.")
     elif lr:
@@ -1583,7 +1741,7 @@ with tab7:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; font-size: 0.9rem; padding: 2rem 0;">
-    <p><strong>ProposalForge Pro</strong> © 2024 | Powered by Claude AI | Enterprise-Grade Document Analysis</p>
+    <p><strong>ProposalForge Agent</strong> | LangGraph agentic RAG · Claude/Groq · Pinecone · Azure Monitor</p>
     <p>Session: {}</p>
 </div>
 """.format(st.session_state.session_id[:12] + "..."), unsafe_allow_html=True)
