@@ -89,6 +89,7 @@ jobs:
     needs: build-deploy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    environment: production          # so it can read env-scoped secrets too
     defaults:
       run:
         working-directory: capstone
@@ -96,12 +97,29 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      - name: Resolve target host (fail early if the app name is empty)
+        run: |
+          HOST="${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          echo "Target host: $HOST"
+          if [ "${{ secrets.AZURE_WEBAPP_NAME }}" = "" ]; then
+            echo "::error::AZURE_WEBAPP_NAME secret is empty. Set it (repo-level) to your web app name, e.g. proposalforge-app"
+            exit 1
+          fi
+          echo "HOST=$HOST" >> "$GITHUB_ENV"
+      - name: Wait for the app to be reachable (cold start)
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://$HOST/health" || echo 000)
+            echo "attempt $i: /health -> $code"
+            [ "$code" = "200" ] && echo "app is up" && exit 0
+            sleep 10
+          done
+          echo "::warning::app did not return 200 within timeout; running load test anyway"
       - name: Install Locust
         run: pip install locust
       - name: Load test with per-endpoint p95 thresholds
-        # locustfile.py enforces health<50ms, retrieve<50ms, end-to-end p95<5s.
         run: |
           locust -f tests/load/locustfile.py \
-            --host https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net \
+            --host "https://$HOST" \
             --headless -u 20 -r 5 -t 60s --only-summary \
             --exit-code-on-error 1
