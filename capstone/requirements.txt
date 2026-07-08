@@ -82,3 +82,5 @@ azure-identity>=1.16                 # managed-identity auth for Service Bus/ACR
 langgraph>=0.2                       # agent orchestration (StateGraph pipeline)
 azure-ai-documentintelligence>=1.0  # PDF/doc layout, tables, figures (optional)
 pymupdf>=1.24                        # render PDF pages to images for visual analysis
+redis>=5.0                          # optional: shared rate-limit store when REDIS_URL is set
+pyodbc>=5.1                          # Azure SQL tracking DB in production (needs MS ODBC Driver 18)
