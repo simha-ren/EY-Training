@@ -37,6 +37,7 @@ class ClaudeLLMClient:
                 self.online = False
                 self.last_error = str(exc)
         self.conversation_history: List[dict] = []
+        self.last_tokens: int = 0
 
     # ------------------------------------------------------------------ raw
     def complete(self, system: str, user: str, temperature: float = 0.2,
@@ -56,6 +57,10 @@ class ClaudeLLMClient:
             )
             # Concatenate any text blocks in the response.
             parts = [b.text for b in response.content if getattr(b, "type", None) == "text"]
+            usage = getattr(response, "usage", None)
+            if usage is not None:
+                self.last_tokens = int((getattr(usage, "input_tokens", 0) or 0)
+                                       + (getattr(usage, "output_tokens", 0) or 0))
             self.last_error = None
             return "\n".join(parts).strip() if parts else None
         except Exception as e:
