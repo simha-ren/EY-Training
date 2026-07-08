@@ -38,6 +38,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Rate limiter (sliding window; built via Kiro SDD — .kiro/specs/rate-limiter/)
+from src.api.rate_limiter import install_rate_limiter
+install_rate_limiter(app)
+
 # Initialize services
 from src.agents.llm_backend import get_llm_client
 claude, LLM_BACKEND = get_llm_client()
@@ -126,6 +130,45 @@ async def system_status_endpoint():
     """Live backend wiring (LLM connector, vector DB, tracing, Azure Monitor)."""
     from src.common.diagnostics import system_status
     return system_status()
+
+
+class BidScoreRequest(BaseModel):
+    # Provide explicit criterion scores (0-100), or opportunity text, or both.
+    scores: Optional[dict] = None
+    text: Optional[str] = None
+    weights: Optional[dict] = None
+
+
+@app.post("/api/v1/bid/score")
+async def bid_score(request: BidScoreRequest):
+    """Bid / No-Bid recommendation (see .kiro/specs/bid-no-bid/)."""
+    from src.agents.bid_scoring import score_bid, analyze_opportunity
+    scores = request.scores
+    signals, domain, hint = [], "General", ""
+    if not scores and request.text:
+        a = analyze_opportunity(request.text, llm=claude)
+        scores = a["suggested_scores"]
+        signals, domain, hint = a["signals"], a["detected_domain"], a["rationale_hint"]
+    result = score_bid(scores or {}, request.weights)
+    result.signals = signals
+    result.detected_domain = domain
+    payload = result.to_dict()
+    if hint:
+        payload["analysis_hint"] = hint
+    return payload
+
+
+class ComplianceRequest(BaseModel):
+    rfp_text: str
+    response_text: str = ""
+
+
+@app.post("/api/v1/compliance/matrix")
+async def compliance_matrix(request: ComplianceRequest):
+    """Requirements traceability matrix (see .kiro/specs/compliance-matrix/)."""
+    from src.agents.compliance_matrix import build_matrix
+    result = build_matrix(request.rfp_text, request.response_text, llm=claude)
+    return result.to_dict()
 
 
 @app.post("/api/v1/retrieve")
