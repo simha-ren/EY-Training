@@ -1,4 +1,4 @@
-"""ProposalForge Agent — Copilot-Studio-style UI.
+"""ProposalForge Agent
 
 One combined Overview page (Details + Knowledge on the left, Test/Chat on the
 right) plus Agents, Evaluation, Analytics and Test Suites. No login. Answers are
@@ -22,7 +22,10 @@ from src.agents.llm_backend import get_llm_client
 from src.retrieval.retriever import get_retriever
 from src.common.file_processor import FileProcessor
 from src.common import doc_analysis, guardrails as gr
+from src.agents.bid_scoring import score_bid, analyze_opportunity, CRITERIA
+from src.agents.compliance_matrix import build_matrix
 from src.common.load_tester import run_load_test
+from src.common.tracking_store import TrackingStore
 from src.common.diagnostics import system_status
 from src.common.test_runner import run_test_suite
 
@@ -63,6 +66,12 @@ def get_client(provider: str = "claude"):
 @st.cache_resource
 def get_guard():
     return gr.Guardrails()
+
+
+@st.cache_resource
+def get_tracker():
+    """Persistent audit/tracking store — Azure SQL in prod, SQLite locally."""
+    return TrackingStore()
 
 @st.cache_resource
 def get_engine():
@@ -125,10 +134,16 @@ def rebuild_index():
         st.warning(f"Vector index unavailable ({e}); using plain-text context.")
 
 def audit(action: str, detail: str = ""):
-    st.session_state.audit.insert(0, {
-        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "user": st.session_state.uid, "action": action, "detail": str(detail)[:180]})
+    entry = {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+             "user": st.session_state.uid, "action": action, "detail": str(detail)[:180]}
+    st.session_state.audit.insert(0, entry)
     st.session_state.audit = st.session_state.audit[:300]
+    # Persist to the tracking DB (Azure SQL in prod, SQLite locally).
+    try:
+        get_tracker().log(action, st.session_state.uid, st.session_state.sid,
+                          str(detail)[:300])
+    except Exception:
+        pass
 
 def _audit_csv(rows) -> str:
     buf = io.StringIO()
@@ -292,8 +307,9 @@ st.markdown(
     '<p>Multi-document agent for any domain — grounded, cited & guardrailed · '
     'reads text, tables & diagrams</p></div>', unsafe_allow_html=True)
 
-tab_over, tab_agents, tab_eval, tab_analytics, tab_activity, tab_tests = st.tabs(
-    ["🏠 Overview", "🤖 Agents", "🧪 Evaluation", "📊 Analytics", "🧾 Activity", "✅ Test Suites"])
+tab_over, tab_agents, tab_bid, tab_compliance, tab_eval, tab_analytics, tab_activity, tab_tests = st.tabs(
+    ["🏠 Overview", "🤖 Agents", "🎯 Bid / No-Bid", "📋 Compliance", "🧪 Evaluation",
+     "📊 Analytics", "🧾 Activity", "✅ Test Suites"])
 
 # =========================== OVERVIEW ====================================== #
 with tab_over:
@@ -451,6 +467,109 @@ with tab_agents:
             except Exception as e:
                 st.error(f"Pipeline error: {e}")
 
+# =========================== BID / NO-BID ================================= #
+with tab_bid:
+    st.markdown("### 🎯 Bid / No-Bid Scoring")
+    st.caption("Should we pursue this opportunity? Score it across weighted "
+               "criteria for a BID / REVIEW / NO-BID recommendation. "
+               "Built via Kiro SDD (.kiro/specs/bid-no-bid/).")
+
+    mode = st.radio("Input", ["Analyze opportunity text", "Score criteria manually"],
+                    horizontal=True, label_visibility="collapsed")
+    _LBL = {"solution_fit": "Solution fit", "win_probability": "Win probability",
+            "strategic_value": "Strategic value", "feasibility": "Feasibility",
+            "risk_profile": "Risk profile (higher = lower risk)"}
+
+    scores, signals, hint, domain = None, [], "", "General"
+    if mode == "Analyze opportunity text":
+        txt = st.text_area("Opportunity / RFP text", height=150,
+                           placeholder="Paste the opportunity summary or RFP text…")
+        if st.button("🔎 Analyze & score", use_container_width=False):
+            if txt.strip():
+                a = analyze_opportunity(txt, llm=client)
+                scores, signals = a["suggested_scores"], a["signals"]
+                hint, domain = a["rationale_hint"], a["detected_domain"]
+                st.session_state["_bid_scores"] = scores
+                st.session_state["_bid_meta"] = (signals, hint, domain)
+            else:
+                st.info("Paste some opportunity text first.")
+        scores = st.session_state.get("_bid_scores", scores)
+        signals, hint, domain = st.session_state.get("_bid_meta", (signals, hint, domain))
+        if signals:
+            st.markdown("**Detected signals:** " +
+                        " ".join(f'<span class="pf-dom">{s}</span>' for s in signals),
+                        unsafe_allow_html=True)
+    else:
+        vals = {}
+        cols = st.columns(5)
+        for i, k in enumerate(CRITERIA):
+            vals[k] = cols[i].slider(_LBL[k], 0, 100, 50, key=f"bid_{k}")
+        if st.button("🎯 Score", use_container_width=False):
+            scores = vals
+            st.session_state["_bid_scores"] = scores
+            st.session_state["_bid_meta"] = ([], "", "General")
+        scores = st.session_state.get("_bid_scores", scores)
+
+    if scores:
+        res = score_bid(scores)
+        colour = {"BID": "on", "NO-BID": "off", "REVIEW": "off"}[res.recommendation]
+        m1, m2 = st.columns([1, 2])
+        m1.metric("Bid score", f"{res.score:.0f}/100")
+        m2.markdown(
+            f'<div style="margin-top:14px"><span class="pf-badge {colour}" '
+            f'style="font-size:16px">Recommendation: {res.recommendation}</span></div>',
+            unsafe_allow_html=True)
+        st.markdown(f"_{res.rationale}_")
+        if hint and hint != res.rationale:
+            st.caption("🧠 " + hint)
+        st.markdown("**Weighted contribution by criterion**")
+        st.bar_chart({_LBL[k].split(" (")[0]: res.breakdown[k] for k in CRITERIA})
+        audit("BID_SCORE", f"{res.recommendation} · {res.score:.0f}/100 · {domain}")
+
+# =========================== COMPLIANCE MATRIX ============================ #
+with tab_compliance:
+    st.markdown("### 📋 Compliance / Requirements Traceability")
+    st.caption("Extract requirements from an RFP and trace each to your proposal "
+               "response — Covered / Partial / Missing. "
+               "Built via Kiro SDD (.kiro/specs/compliance-matrix/).")
+
+    docs = st.session_state.documents
+    prefill_rfp = docs[0]["text"][:4000] if docs else ""
+    prefill_resp = docs[-1]["text"][:4000] if len(docs) > 1 else ""
+    cc1, cc2 = st.columns(2)
+    rfp_text = cc1.text_area("RFP / requirements source", value=prefill_rfp,
+                             height=220, placeholder="Paste the RFP text (shall/must/…)")
+    resp_text = cc2.text_area("Our proposal response", value=prefill_resp,
+                              height=220, placeholder="Paste our proposal response")
+    if docs:
+        st.caption("Tip: pre-filled from your uploaded Knowledge — edit as needed.")
+
+    if st.button("📋 Build traceability matrix"):
+        if not rfp_text.strip():
+            st.info("Paste some RFP text first.")
+        else:
+            m = build_matrix(rfp_text, resp_text, llm=client)
+            s = m.summary
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Compliance", f"{s['compliance_pct']}%")
+            k2.metric("Covered", s["covered"])
+            k3.metric("Partial", s["partial"])
+            k4.metric("Missing", s["missing"])
+            badge = {"Covered": "🟢", "Partial": "🟠", "Missing": "🔴"}
+            st.dataframe(
+                [{"ID": r.id, "Status": f"{badge[r.status]} {r.status}",
+                  "Requirement": r.requirement,
+                  "Match": f"{r.score:.0%}", "Evidence": r.evidence[:120]}
+                 for r in m.rows],
+                use_container_width=True, hide_index=True)
+            if m.gaps:
+                st.markdown("**⚠️ Gaps to address (worst first)**")
+                for g in m.gaps:
+                    st.markdown(f"- `{g.id}` **{g.status}** — {g.requirement}")
+            st.caption("🧠 " + m.gap_summary)
+            audit("COMPLIANCE_MATRIX",
+                  f"{s['compliance_pct']}% · {s['covered']}/{s['total']} covered")
+
 # =========================== EVALUATION ==================================== #
 with tab_eval:
     st.markdown("### 🧪 Evaluation")
@@ -509,18 +628,19 @@ with tab_analytics:
 # =========================== ACTIVITY (audit log) ========================= #
 with tab_activity:
     st.markdown("### 🧾 Activity — audit log")
-    st.caption("Every knowledge upload, question, and guardrail event is recorded "
-               "here for this session.")
-    aud = st.session_state.audit
-    if aud:
+    tracker = get_tracker()
+    st.caption(f"Persisted to **{tracker.describe()}**. In production this is Azure "
+               "SQL (set AZURE_SQL_CONNECTION_STRING); locally it uses SQLite.")
+    rows = tracker.get_logs(limit=300) or st.session_state.audit
+    if rows:
         by = {}
-        for a in aud:
+        for a in rows:
             by[a["action"]] = by.get(a["action"], 0) + 1
-        cc = st.columns(len(by) or 1)
-        for i, (k, v) in enumerate(by.items()):
-            cc[i % len(cc)].metric(k.replace("_", " ").title(), v)
-        st.dataframe(aud, use_container_width=True, hide_index=True)
-        st.download_button("⬇️ Download audit log (CSV)", data=_audit_csv(aud),
+        cc = st.columns(min(len(by), 6) or 1)
+        for i, (k, v) in enumerate(list(by.items())[:6]):
+            cc[i % len(cc)].metric(str(k).replace("_", " ").title(), v)
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.download_button("⬇️ Download audit log (CSV)", data=_audit_csv(rows),
                            file_name="audit_log.csv", mime="text/csv")
     else:
         st.info("No activity yet — upload knowledge or ask a question in Overview.")
