@@ -19,6 +19,7 @@ class LLMClient:
         self.model = self.settings.get("model", "gpt-4o-mini")
         self._client = None
         self.online = bool(self.api_key)
+        self.last_tokens: int = 0
         if self.online:
             try:
                 self._init_client()
@@ -53,6 +54,9 @@ class LLMClient:
                     {"role": "user", "content": user},
                 ],
             )
+            usage = getattr(resp, "usage", None)
+            if usage is not None:
+                self.last_tokens = int(getattr(usage, "total_tokens", 0) or 0)
             return resp.choices[0].message.content
         except Exception:
             return None
