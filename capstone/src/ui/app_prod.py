@@ -1,4 +1,4 @@
-"""ProposalForge Agent
+"""ProposalForge Agent — Copilot-Studio-style UI.
 
 One combined Overview page (Details + Knowledge on the left, Test/Chat on the
 right) plus Agents, Evaluation, Analytics and Test Suites. No login. Answers are
@@ -12,6 +12,7 @@ import os
 import re
 import io
 import csv
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -22,12 +23,12 @@ from src.agents.llm_backend import get_llm_client
 from src.retrieval.retriever import get_retriever
 from src.common.file_processor import FileProcessor
 from src.common import doc_analysis, guardrails as gr
-#from src.agents.bid_scoring import score_bid, analyze_opportunity, CRITERIA
 from src.agents.compliance_matrix import build_matrix
 from src.common.load_tester import run_load_test
 from src.common.tracking_store import TrackingStore
-from src.common.diagnostics import system_status
 from src.common.test_runner import run_test_suite
+from src.retrieval.ragas_eval import evaluate_ragas
+from src.retrieval.ragas_llm import evaluate_metrics, METRIC_KEYS
 
 # --------------------------------------------------------------------------- #
 st.set_page_config(page_title="ProposalForge Agent", page_icon="🤖",
@@ -245,9 +246,87 @@ def _grounded(answer: str, context: str) -> float:
     c = set(re.findall(r"[a-z]{4,}", (context or "").lower()))
     return round(len(a & c) / max(1, len(a)), 2) if a else 0.0
 
+
+SYSTEM_SOLUTIONS = (
+    "You are ProposalForge, a senior proposal solutions consultant. The user has "
+    "uploaded documents that describe business problems, current situations and "
+    "proposals. Answer the user's question directly and specifically. When they ask "
+    "about the problems or how to solve them, give concrete PROPOSED SOLUTIONS and "
+    "actionable INSIGHTS to solve those problems, grounded in the uploaded documents. "
+    "Be specific and practical; prefer short paragraphs and bullet points. If the "
+    "documents don't cover something, say so briefly and give your best expert advice."
+)
+
+_REPORT_WORDS = ("download", "report", "generate a doc", "generate a document",
+                 "proposed solutions doc", "solutions document", "word doc",
+                 "docx", "give me a doc", "export", "downloadable")
+
+
+def _report_intent(q: str) -> bool:
+    ql = (q or "").lower()
+    return any(w in ql for w in _REPORT_WORDS)
+
+
+def _llm_solutions_for(doc: dict) -> dict:
+    """Objective/Problems/Proposed solutions/Insights for one doc (LLM if online)."""
+    an = doc.get("analysis", {}) or {}
+    base = {"Objective": an.get("Objective", ""),
+            "Problems / current situation": an.get("Current solutions", ""),
+            "Proposed solutions & improvements": an.get("Proposed solutions", ""),
+            "Insights": an.get("Insights", "")}
+    if online and hasattr(client, "complete"):
+        try:
+            raw = client.complete(
+                SYSTEM_SOLUTIONS,
+                "For the document below, write improvement recommendations using these "
+                "EXACT headers as short bullet lines:\nOBJECTIVE:\nPROBLEMS:\n"
+                "PROPOSED SOLUTIONS:\nINSIGHTS:\n\nDocument:\n" + (doc.get("text", "")[:6000]))
+            if raw and "PROPOSED SOLUTIONS" in raw.upper():
+                # reuse the section parser (maps to Objective/Current/Proposed/Insights)
+                p = _parse_sections(
+                    raw.replace("PROBLEMS:", "CURRENT SOLUTIONS:"))
+                return {"Objective": p.get("Objective", ""),
+                        "Problems / current situation": p.get("Current solutions", ""),
+                        "Proposed solutions & improvements": p.get("Proposed solutions", ""),
+                        "Insights": p.get("Insights", "")}
+        except Exception:
+            pass
+    return base
+
+
+def build_solutions_report():
+    """Build an in-memory .docx of proposed solutions for every uploaded doc."""
+    from docx import Document
+    from docx.shared import Pt, RGBColor
+    docs = st.session_state.documents
+    d = Document()
+    h = d.add_heading("Proposed Solutions & Improvement Recommendations", level=0)
+    d.add_paragraph(f"Prepared by {st.session_state.agent_name} · "
+                    f"{datetime.now().strftime('%Y-%m-%d %H:%M')}").italic = True
+    d.add_paragraph(
+        "This report reviews the uploaded proposal documents, summarises the problems "
+        "they raise, and recommends concrete proposed solutions and insights to address "
+        "them.")
+    for i, doc in enumerate(docs, 1):
+        d.add_heading(f"{i}. {doc['name']}  ({doc.get('domain','General')})", level=1)
+        sec = _llm_solutions_for(doc)
+        for label in ("Objective", "Problems / current situation",
+                      "Proposed solutions & improvements", "Insights"):
+            val = (sec.get(label) or "").strip()
+            d.add_heading(label, level=2)
+            if val:
+                for ln in val.splitlines():
+                    ln = ln.strip().lstrip("-•* ").strip()
+                    if ln:
+                        d.add_paragraph(ln, style="List Bullet")
+            else:
+                d.add_paragraph("—")
+    buf = io.BytesIO()
+    d.save(buf)
+    return "Proposed_Solutions_Report.docx", buf.getvalue()
+
 def answer_query(q: str):
     ss = st.session_state
-    # input guardrail
     gin = guard.check_pii(q)
     ss.history.append({"role": "user", "content": q})
     audit("QUERY", q)
@@ -259,7 +338,27 @@ def answer_query(q: str):
                        "I can discuss the documents in general terms but won't reveal "
                        "personal or health identifiers."})
         return
-    # retrieve grounded context
+
+    # ---- report-download intent -> build a proposed-solutions .docx ----
+    if _report_intent(q) and ss.documents:
+        try:
+            fname, data = build_solutions_report()
+            ss["report_file"] = (fname, data)
+            audit("REPORT_DOWNLOAD", f"{fname} · {len(ss.documents)} docs")
+            ss.history.append({"role": "assistant",
+                "content": ("✅ I've prepared a **Proposed Solutions & Improvement "
+                            "Recommendations** report covering your uploaded "
+                            f"{len(ss.documents)} document(s) — objectives, the problems "
+                            "raised, and concrete proposed solutions and insights for "
+                            "each. Use the **Download** button just below the chat."),
+                "confidence": 0.95, "sources": [d["name"] for d in ss.documents],
+                "domain": "General", "grounded": 1.0})
+        except Exception as e:
+            ss.history.append({"role": "assistant",
+                "content": f"I couldn't build the report ({e}). Please try again."})
+        return
+
+    # ---- retrieve grounded context ----
     sources, retrieved = [], []
     r = ss.retriever
     if r is not None:
@@ -273,32 +372,71 @@ def answer_query(q: str):
             if h["source"] not in sources:
                 sources.append(h["source"])
     elif ss.documents:
-        context = ss.documents[-1]["text"][:3000]
+        context = ss.documents[-1]["text"][:3500]
         sources = [ss.documents[-1]["name"]]
     else:
         context = ""
-    # short memory
+
     recent = [m for m in ss.history if m["role"] in ("user", "assistant")
               and not m.get("blocked")][-4:]
+    convo = ""
     if recent:
-        convo = "\n".join(f"{m['role'].capitalize()}: {m['content'][:280]}" for m in recent)
-        context = f"Conversation so far:\n{convo}\n\n---\nDocument context:\n{context}"
+        convo = "\n".join(f"{m['role'].capitalize()}: {m['content'][:280]}"
+                          for m in recent)
     instr = (ss.agent_instructions or "").strip()
+
+    # ---- answer: solution-oriented, DIRECT ----
+    ans, conf = "", 0.0
+    prompt = ""
     if instr:
-        context = f"Agent instructions (follow these):\n{instr}\n\n---\n{context}"
-    # answer (allow general knowledge only when no knowledge is loaded, so it
-    # still answers ANY domain, but prefers the uploaded documents)
-    resp = client.answer_question(context, q, allow_general_knowledge=not bool(ss.documents))
-    ans = resp.get("answer", "")
-    conf = float(resp.get("confidence", 0.0))
-    # output guardrail
+        prompt += f"Agent instructions (follow these):\n{instr}\n\n"
+    if convo:
+        prompt += f"Conversation so far:\n{convo}\n\n"
+    prompt += (f"Documents:\n{context}\n\n---\nUser question: {q}\n\n"
+               "Answer directly. If it's about problems or solutions, give concrete "
+               "proposed solutions and insights grounded in the documents.")
+    if online and hasattr(client, "complete"):
+        try:
+            ans = client.complete(SYSTEM_SOLUTIONS, prompt) or ""
+        except Exception:
+            ans = ""
+    if not ans:
+        # offline / fallback — synthesise a direct answer from the analysis
+        resp = client.answer_question(context, q,
+                                      allow_general_knowledge=not bool(ss.documents))
+        ans = resp.get("answer", "") or ""
+        conf = float(resp.get("confidence", 0.0))
+        wants_sol = any(w in q.lower() for w in
+                        ("solution", "solve", "improve", "recommend", "fix", "how",
+                         "problem", "address", "what should"))
+        if ss.documents and wants_sol:
+            an = ss.documents[-1].get("analysis", {})
+            probs = (an.get("Current solutions") or "").strip()
+            ps = (an.get("Proposed solutions") or "").strip()
+            ins = (an.get("Insights") or "").strip()
+            bull = lambda t: "\n".join(f"- {l.lstrip('-•* ').strip()}"
+                                       for l in t.splitlines() if l.strip())
+            if ps or ins:
+                parts = ["Based on your uploaded documents, here are the problems "
+                         "and how to address them:"]
+                if probs:
+                    parts.append("**Problems / current situation**\n" + bull(probs))
+                if ps:
+                    parts.append("**Proposed solutions**\n" + bull(ps))
+                if ins:
+                    parts.append("**Insights**\n" + bull(ins))
+                ans = "\n\n".join(parts)     # lead with the solutions, not a not-found note
+    conf = conf or (0.85 if (sources and ans) else 0.6 if ans else 0.0)
+
     gout = guard.check_pii(ans)
     if gout.triggered:
         ss.guardrail_hits += 1
         audit("GUARDRAIL_REDACT", "answer contained PII/PHI — redacted")
         ans = gr.redact_pii(ans)
-    ss.history.append({"role": "assistant", "content": ans, "confidence": conf,
-                       "sources": sources, "domain": classify_domain(q),
+    ss.history.append({"role": "assistant", "content": ans or
+                       "I don't have enough in the documents to answer that yet.",
+                       "confidence": conf, "sources": sources,
+                       "domain": classify_domain(q + " " + ans),
                        "grounded": _grounded(ans, context)})
 
 # ------------------------------- centered title ---------------------------- #
@@ -307,8 +445,8 @@ st.markdown(
     '<p>Multi-document agent for any domain — grounded, cited & guardrailed · '
     'reads text, tables & diagrams</p></div>', unsafe_allow_html=True)
 
-tab_over, tab_agents, tab_bid, tab_compliance, tab_eval, tab_analytics, tab_activity, tab_tests = st.tabs(
-    ["🏠 Overview", "🤖 Agents", "🎯 Bid / No-Bid", "📋 Compliance", "🧪 Evaluation",
+tab_over, tab_agents, tab_compliance, tab_eval, tab_analytics, tab_activity, tab_tests = st.tabs(
+    ["🏠 Overview", "🤖 Agents", "📋 Compliance", "🧪 Evaluation",
      "📊 Analytics", "🧾 Activity", "✅ Test Suites"])
 
 # =========================== OVERVIEW ====================================== #
@@ -421,6 +559,15 @@ with tab_over:
                             st.caption(f"confidence {m['confidence']:.0%} · "
                                        f"grounded {m.get('grounded',0):.0%}")
 
+            # download button appears once a report has been generated in chat
+            if st.session_state.get("report_file"):
+                fname, data = st.session_state["report_file"]
+                st.download_button(
+                    "⬇️ Download proposed-solutions report (.docx)", data=data,
+                    file_name=fname,
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True)
+
             # follow-ups based on the PREVIOUS question
             last_q = next((m["content"] for m in reversed(st.session_state.history)
                            if m["role"] == "user"), "")
@@ -446,85 +593,127 @@ with tab_over:
 # =========================== AGENTS (LangGraph) ============================ #
 with tab_agents:
     st.markdown("### 🤖 Agents — LangGraph pipeline")
-    st.caption("Route → Guardrails → Retrieve → Generate → Suggest. Runs on the live "
-               "LLM when a key is set. Identifies the topic and answers any domain.")
+    st.caption("Route → Guardrails → Retrieve → Generate → Suggest, grounded in ALL "
+               "your uploaded documents (multi-doc, multi-domain). Shows per-stage "
+               "latency, token usage, an LLM-graded RAGAS score, and production metrics.")
+    if not st.session_state.documents:
+        st.info("Add documents in the Overview tab first — the pipeline runs over your "
+                "uploaded knowledge across domains.")
     if not online:
-        st.warning("No online LLM connected — set CLAUDE_API_KEY or GROQ_API_KEY for live "
-                   "pipeline answers (not assumptions).")
-    aq = st.text_input("Ask the agent pipeline", placeholder="e.g. What is the objective and key risk?")
+        st.info("Offline mode — the pipeline still runs and is timed; set "
+                "CLAUDE_API_KEY or GROQ_API_KEY for live LLM answers and token counts.")
+    aq = st.text_input("Ask the agent pipeline",
+                       placeholder="e.g. Across all documents, what are the top problems and how do we solve them?")
     if st.button("▶️ Run pipeline") and aq:
-        with st.spinner("Running LangGraph pipeline…"):
+        stages, ev_tokens = {}, 0
+        t = time.perf_counter(); dom = classify_domain(aq)
+        stages["route"] = (time.perf_counter() - t) * 1000
+        t = time.perf_counter(); _ = guard.check_pii(aq)
+        stages["guard"] = (time.perf_counter() - t) * 1000
+        # retrieve across ALL uploaded docs
+        t = time.perf_counter()
+        r = st.session_state.retriever; ret = []
+        if r is not None:
+            try: ret = r.search(aq, top_k=5)
+            except Exception: ret = []
+        stages["retrieve"] = (time.perf_counter() - t) * 1000
+        ctx = "\n\n".join(f"[Source: {h['source']}]\n{h['text']}" for h in ret)
+        # map evidence sources -> domains (multi-doc / multi-domain view)
+        dom_by_name = {d["name"]: d.get("domain", "General")
+                       for d in st.session_state.documents}
+        evidence = []
+        for h in ret:
+            nm = h.get("source", "?")
+            if nm not in [e["source"] for e in evidence]:
+                evidence.append({"source": nm, "domain": dom_by_name.get(nm, "General")})
+        # generate (grounded in the retrieved multi-doc context)
+        t = time.perf_counter()
+        ans_text = ""
+        prompt = (f"Documents (multiple sources may span different domains):\n{ctx}\n\n"
+                  f"Question: {aq}\nAnswer directly, cite which document/domain each "
+                  "point draws from, and give proposed solutions and insights.")
+        if online and hasattr(client, "complete"):
             try:
-                turn = get_engine().ask_graph(aq)
-                dom = getattr(turn, "domain", None) or classify_domain(aq)
-                st.markdown(f'**Domain:** <span class="pf-dom">{dom}</span>',
-                            unsafe_allow_html=True)
-                ans = getattr(turn, "answer", None)
-                st.write(ans.text if ans else getattr(turn, "message", "(no answer)"))
-                if getattr(turn, "follow_ups", None):
-                    st.markdown("**Follow-ups:** " + " · ".join(turn.follow_ups))
-                st.caption("Pipeline nodes: route → guard → retrieve → generate → suggest")
-            except Exception as e:
-                st.error(f"Pipeline error: {e}")
+                ans_text = client.complete(SYSTEM_SOLUTIONS, prompt) or ""
+                ev_tokens = int(getattr(client, "last_tokens", 0) or 0)
+            except Exception:
+                ans_text = ""
+        if not ans_text:
+            resp = client.answer_question(ctx, aq,
+                                          allow_general_knowledge=not bool(st.session_state.documents))
+            ans_text = resp.get("answer", "") or "(no answer)"
+            ev_tokens = int(resp.get("tokens", 0) or 0)
+        if not ev_tokens:      # offline estimate (~4 chars/token)
+            ev_tokens = (len(prompt) + len(ans_text)) // 4
+        stages["generate"] = (time.perf_counter() - t) * 1000
+        # suggest
+        t = time.perf_counter(); fups = followups(aq, ans_text)
+        stages["suggest"] = (time.perf_counter() - t) * 1000
+        total = sum(stages.values())
+        # record history for production metrics
+        st.session_state.setdefault("_agent_lat", []).append(round(total, 1))
+        st.session_state["_agent_lat"] = st.session_state["_agent_lat"][-50:]
+        st.session_state.setdefault("_agent_tok", []).append(int(ev_tokens))
+        st.session_state["_agent_tok"] = st.session_state["_agent_tok"][-50:]
+        st.session_state["_agent_last"] = {"dom": dom, "ans": ans_text, "fups": fups,
+                                           "stages": stages, "total": total, "ctx": ctx,
+                                           "aq": aq, "tokens": ev_tokens,
+                                           "evidence": evidence}
+        audit("AGENT_PIPELINE", f"{dom} · {total:.0f}ms · {ev_tokens} tok · "
+              f"{len(evidence)} sources")
 
-# =========================== BID / NO-BID ================================= #
-with tab_bid:
-    st.markdown("### 🎯 Bid / No-Bid Scoring")
-    st.caption("Should we pursue this opportunity? Score it across weighted "
-               "criteria for a BID / REVIEW / NO-BID recommendation. "
-               "Built via Kiro SDD (.kiro/specs/bid-no-bid/).")
-
-    mode = st.radio("Input", ["Analyze opportunity text", "Score criteria manually"],
-                    horizontal=True, label_visibility="collapsed")
-    _LBL = {"solution_fit": "Solution fit", "win_probability": "Win probability",
-            "strategic_value": "Strategic value", "feasibility": "Feasibility",
-            "risk_profile": "Risk profile (higher = lower risk)"}
-
-    scores, signals, hint, domain = None, [], "", "General"
-    if mode == "Analyze opportunity text":
-        txt = st.text_area("Opportunity / RFP text", height=150,
-                           placeholder="Paste the opportunity summary or RFP text…")
-        if st.button("🔎 Analyze & score", use_container_width=False):
-            if txt.strip():
-                a = analyze_opportunity(txt, llm=client)
-                scores, signals = a["suggested_scores"], a["signals"]
-                hint, domain = a["rationale_hint"], a["detected_domain"]
-                st.session_state["_bid_scores"] = scores
-                st.session_state["_bid_meta"] = (signals, hint, domain)
-            else:
-                st.info("Paste some opportunity text first.")
-        scores = st.session_state.get("_bid_scores", scores)
-        signals, hint, domain = st.session_state.get("_bid_meta", (signals, hint, domain))
-        if signals:
-            st.markdown("**Detected signals:** " +
-                        " ".join(f'<span class="pf-dom">{s}</span>' for s in signals),
-                        unsafe_allow_html=True)
-    else:
-        vals = {}
+    last = st.session_state.get("_agent_last")
+    if last:
+        st.markdown(f'**Query domain:** <span class="pf-dom">{last["dom"]}</span>',
+                    unsafe_allow_html=True)
+        st.write(last["ans"])
+        if last["evidence"]:
+            st.markdown("**Evidence used (multi-doc / multi-domain):** " +
+                        " ".join(f'<span class="pf-dom">{e["source"]} · {e["domain"]}</span>'
+                                 for e in last["evidence"]), unsafe_allow_html=True)
+        if last["fups"]:
+            st.markdown("**Follow-ups:** " + " · ".join(last["fups"]))
+        st.divider()
+        st.markdown("#### ⏱️ Latency & tokens (this run)")
         cols = st.columns(5)
-        for i, k in enumerate(CRITERIA):
-            vals[k] = cols[i].slider(_LBL[k], 0, 100, 50, key=f"bid_{k}")
-        if st.button("🎯 Score", use_container_width=False):
-            scores = vals
-            st.session_state["_bid_scores"] = scores
-            st.session_state["_bid_meta"] = ([], "", "General")
-        scores = st.session_state.get("_bid_scores", scores)
+        for col, k in zip(cols, ["route", "guard", "retrieve", "generate", "suggest"]):
+            col.metric(k.title(), f"{last['stages'].get(k, 0):.0f} ms")
+        t1, t2 = st.columns(2)
+        t1.metric("Total pipeline latency", f"{last['total']:.0f} ms")
+        t2.metric("Tokens used", f"{last['tokens']:,}")
+        st.bar_chart({k: round(v, 1) for k, v in last["stages"].items()})
+        st.markdown("#### 🧪 RAGAS evaluation (LLM-graded)")
+        rag = evaluate_metrics(last["aq"], last["ans"],
+                               [last["ctx"]] if last["ctx"] else [],
+                               client=client, online=online)
+        st.caption("Graded by: " + rag.get("mode", "?"))
+        rc = st.columns(5)
+        rc[0].metric("Faithfulness", f"{rag['faithfulness']:.0%}")
+        rc[1].metric("Answer relevance", f"{rag['answer_relevance']:.0%}")
+        rc[2].metric("Context precision", f"{rag['context_precision']:.0%}")
+        rc[3].metric("Context recall", f"{rag['context_recall']:.0%}")
+        rc[4].metric("Overall", f"{rag['overall']:.0%}")
 
-    if scores:
-        res = score_bid(scores)
-        colour = {"BID": "on", "NO-BID": "off", "REVIEW": "off"}[res.recommendation]
-        m1, m2 = st.columns([1, 2])
-        m1.metric("Bid score", f"{res.score:.0f}/100")
-        m2.markdown(
-            f'<div style="margin-top:14px"><span class="pf-badge {colour}" '
-            f'style="font-size:16px">Recommendation: {res.recommendation}</span></div>',
-            unsafe_allow_html=True)
-        st.markdown(f"_{res.rationale}_")
-        if hint and hint != res.rationale:
-            st.caption("🧠 " + hint)
-        st.markdown("**Weighted contribution by criterion**")
-        st.bar_chart({_LBL[k].split(" (")[0]: res.breakdown[k] for k in CRITERIA})
-        audit("BID_SCORE", f"{res.recommendation} · {res.score:.0f}/100 · {domain}")
+    lats = st.session_state.get("_agent_lat", [])
+    toks = st.session_state.get("_agent_tok", [])
+    if lats:
+        import statistics as _stx
+        st.divider(); st.markdown("#### 📈 Production metrics")
+        p50 = _stx.median(lats)
+        p95 = sorted(lats)[max(0, int(round(len(lats) * 0.95)) - 1)]
+        g = st.columns(4)
+        g[0].metric("Runs", len(lats))
+        g[1].metric("p50 latency", f"{p50:.0f} ms")
+        g[2].metric("p95 latency", f"{p95:.0f} ms")
+        g[3].metric("Total tokens", f"{sum(toks):,}")
+        gc1, gc2 = st.columns(2)
+        with gc1:
+            st.markdown("**Latency per run (ms)**")
+            st.line_chart({"latency_ms": lats})
+        with gc2:
+            st.markdown("**Tokens per run**")
+            st.bar_chart({"tokens": toks})
+
 
 # =========================== COMPLIANCE MATRIX ============================ #
 with tab_compliance:
@@ -570,38 +759,69 @@ with tab_compliance:
             audit("COMPLIANCE_MATRIX",
                   f"{s['compliance_pct']}% · {s['covered']}/{s['total']} covered")
 
-# =========================== EVALUATION ==================================== #
+# =========================== EVALUATION (RAGAS) ============================ #
 with tab_eval:
-    st.markdown("### 🧪 Evaluation")
-    st.caption("Runs a small grounded-answer check over your knowledge and reports "
-               "confidence and groundedness per question.")
-    default_qs = "What is the main objective?\nWhat are the key risks?\nWho is eligible?"
+    st.markdown("### 🧪 Evaluation — RAGAS (LLM-graded)")
+    st.caption("Each question is answered from the retrieved context, then graded on "
+               "four RAGAS metrics — faithfulness, answer relevance, context precision "
+               "and context recall. With a key set, metrics are LLM-graded; offline it "
+               "falls back to a lexical heuristic.")
+    default_qs = ("What is the main objective?\nWhat are the key problems?\n"
+                  "What solutions are proposed?")
     qs = st.text_area("Questions (one per line)", value=default_qs, height=90)
-    if st.button("▶️ Run evaluation"):
+    if st.button("▶️ Run RAGAS evaluation"):
         if not st.session_state.documents:
             st.info("Add knowledge in the Overview tab first.")
         else:
-            rows, gs, cs = [], [], []
+            rows, agg, modes = [], {k: [] for k in METRIC_KEYS + ["overall"]}, set()
             r = st.session_state.retriever
-            for q in [x.strip() for x in qs.splitlines() if x.strip()]:
+            prog = st.progress(0.0)
+            questions = [x.strip() for x in qs.splitlines() if x.strip()]
+            for i, q in enumerate(questions):
                 ret = []
                 if r is not None:
                     try: ret = r.search(q, top_k=4)
                     except Exception: ret = []
-                ctx = "\n\n".join(h["text"] for h in ret) or \
-                      st.session_state.documents[-1]["text"][:3000]
-                resp = client.answer_question(ctx, q, allow_general_knowledge=False)
-                a = resp.get("answer", ""); conf = float(resp.get("confidence", 0))
-                g = _grounded(a, ctx); gs.append(g); cs.append(conf)
-                rows.append({"Question": q, "Confidence": f"{conf:.0%}",
-                             "Grounded": f"{g:.0%}", "Answer": a[:120] + "…"})
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Avg confidence", f"{(sum(cs)/len(cs)):.0%}" if cs else "—")
-            m2.metric("Avg groundedness", f"{(sum(gs)/len(gs)):.0%}" if gs else "—")
-            m3.metric("Questions", len(rows))
+                chunks = [h["text"] for h in ret] or \
+                    [st.session_state.documents[-1]["text"][:3000]]
+                ctx = "\n\n".join(chunks)
+                a = ""
+                if online and hasattr(client, "complete"):
+                    try:
+                        a = client.complete(SYSTEM_SOLUTIONS,
+                            f"Documents:\n{ctx}\n\nQuestion: {q}\n"
+                            "Answer directly and grounded in the documents.") or ""
+                    except Exception:
+                        a = ""
+                if not a:
+                    a = client.answer_question(ctx, q,
+                                               allow_general_knowledge=False).get("answer", "")
+                m = evaluate_metrics(q, a, chunks, client=client, online=online)
+                modes.add(m.get("mode", "?"))
+                for k in agg:
+                    agg[k].append(m[k])
+                rows.append({"Question": q,
+                             "Faithfulness": f"{m['faithfulness']:.0%}",
+                             "Answer relevance": f"{m['answer_relevance']:.0%}",
+                             "Context precision": f"{m['context_precision']:.0%}",
+                             "Context recall": f"{m['context_recall']:.0%}",
+                             "Overall": f"{m['overall']:.0%}"})
+                prog.progress((i + 1) / len(questions))
+            prog.empty()
+            mean = lambda v: (sum(v) / len(v)) if v else 0.0
+            st.caption("Graded by: " + " · ".join(sorted(modes)))
+            m = st.columns(5)
+            m[0].metric("Faithfulness", f"{mean(agg['faithfulness']):.0%}")
+            m[1].metric("Answer relevance", f"{mean(agg['answer_relevance']):.0%}")
+            m[2].metric("Context precision", f"{mean(agg['context_precision']):.0%}")
+            m[3].metric("Context recall", f"{mean(agg['context_recall']):.0%}")
+            m[4].metric("Overall", f"{mean(agg['overall']):.0%}")
             st.dataframe(rows, use_container_width=True, hide_index=True)
-            audit("EVALUATION", f"{len(rows)} questions · avg grounded "
-                  f"{(sum(gs)/len(gs)):.0%}" if gs else f"{len(rows)} questions")
+            st.markdown("**RAGAS metric averages**")
+            st.bar_chart({k.replace('_', ' ').title(): round(mean(agg[k]), 3)
+                          for k in METRIC_KEYS})
+            audit("EVALUATION",
+                  f"RAGAS · {len(rows)} q · overall {mean(agg['overall']):.0%}")
 
 # =========================== ANALYTICS ===================================== #
 with tab_analytics:
@@ -648,19 +868,10 @@ with tab_activity:
 # =========================== TEST SUITES =================================== #
 with tab_tests:
     st.markdown("### ✅ Test Suites")
-    # system status
-    st.markdown("#### 🩺 System status")
-    if st.button("🔄 Refresh status"):
-        st.session_state._sys = system_status()
-    s = st.session_state.get("_sys") or system_status()
-    cols = st.columns(4)
-    cols[0].metric("LLM", s["llm"].get("backend", "—"))
-    cols[1].metric("Vector DB", s["vector_db"].get("backend", "—"))
-    cols[2].metric("Tracing", s["tracing"].get("provider", "—"))
-    cols[3].metric("Azure Monitor", "on" if s["observability"].get("azure_monitor") else "off")
+    st.caption("Unit + integration tests (pytest) and an end-to-end load test — "
+               "run them here and see pass/fail, coverage and latency.")
 
-    st.divider()
-    st.markdown("#### 🧪 Unit tests & coverage")
+    st.markdown("#### 🧪 Unit & integration tests + coverage")
     if st.button("▶️ Run test suite"):
         with st.spinner("Running pytest…"):
             st.session_state._tests = run_test_suite(str(Path(__file__).resolve().parents[2]))
