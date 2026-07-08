@@ -22,7 +22,7 @@ from src.agents.llm_backend import get_llm_client
 from src.retrieval.retriever import get_retriever
 from src.common.file_processor import FileProcessor
 from src.common import doc_analysis, guardrails as gr
-from src.agents.bid_scoring import score_bid, analyze_opportunity, CRITERIA
+#from src.agents.bid_scoring import score_bid, analyze_opportunity, CRITERIA
 from src.agents.compliance_matrix import build_matrix
 from src.common.load_tester import run_load_test
 from src.common.tracking_store import TrackingStore
