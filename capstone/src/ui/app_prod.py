@@ -233,6 +233,48 @@ def ingest_files(files, scan_visuals: bool):
         rebuild_index()
     return added
 
+ENGINE_DOMAIN_MAP = {"Finance": "finance", "Healthcare": "healthcare",
+                     "Agriculture": "agriculture"}
+
+
+def _ensure_general_domain(engine):
+    """Register a permissive 'general' domain so multi-domain uploads have a home."""
+    if "general" not in engine.domains:
+        from src.common.config import DomainConfig
+        engine.domains["general"] = DomainConfig(
+            key="general", label="General", emoji="🗂️",
+            persona=("You are a proposal solutions consultant. Answer grounded in the "
+                     "retrieved documents across any business domain and give concrete "
+                     "proposed solutions and insights."),
+            routing_keywords=[], guardrails={}, clarify={}, follow_ups=[],
+            cross_domain_hint=[])
+
+
+def feed_engine_docs():
+    """Feed uploaded docs (as text) into the LangGraph Engine store under mapped domains."""
+    added = 0
+    try:
+        eng = get_engine(); _ensure_general_domain(eng)
+        fed = st.session_state.setdefault("_engine_fed", set())
+        for d in st.session_state.documents:
+            if d["id"] in fed:
+                continue
+            text = (d.get("text") or "").strip()
+            if not text:
+                fed.add(d["id"]); continue
+            dom = ENGINE_DOMAIN_MAP.get(d.get("domain", "General"), "general")
+            name = (os.path.splitext(d["name"])[0] or d["name"]) + ".txt"
+            try:
+                added += eng.add_document(text.encode("utf-8"), name, dom)
+                fed.add(d["id"])
+            except Exception:
+                pass
+        st.session_state["_engine_fed"] = fed
+    except Exception:
+        pass
+    return added
+
+
 def followups(last_q: str, last_a: str):
     try:
         raw = client.get_auto_suggestions((last_a or "")[:1500], last_q or "")
@@ -593,79 +635,129 @@ with tab_over:
 # =========================== AGENTS (LangGraph) ============================ #
 with tab_agents:
     st.markdown("### 🤖 Agents — LangGraph pipeline")
-    st.caption("Route → Guardrails → Retrieve → Generate → Suggest, grounded in ALL "
-               "your uploaded documents (multi-doc, multi-domain). Shows per-stage "
-               "latency, token usage, an LLM-graded RAGAS score, and production metrics.")
+    st.caption("Runs Route → Guardrails → Retrieve → Generate → Suggest over ALL your "
+               "uploaded documents (multi-doc, multi-domain), with latency, token usage "
+               "and an LLM-graded RAGAS score.")
+    mode = st.radio(
+        "Execution mode", ["LangGraph Engine (real graph over your docs)",
+                           "Instrumented pipeline (per-stage timing)"],
+        horizontal=True, label_visibility="collapsed")
+    engine_mode = mode.startswith("LangGraph Engine")
     if not st.session_state.documents:
-        st.info("Add documents in the Overview tab first — the pipeline runs over your "
+        st.info("Add documents in the Overview tab first — the pipeline runs on your "
                 "uploaded knowledge across domains.")
     if not online:
         st.info("Offline mode — the pipeline still runs and is timed; set "
-                "CLAUDE_API_KEY or GROQ_API_KEY for live LLM answers and token counts.")
+                "CLAUDE_API_KEY / GROQ_API_KEY for live answers and exact token counts.")
+    if engine_mode:
+        n = feed_engine_docs()
+        eng = get_engine()
+        try:
+            stats = eng.store.stats()
+            ns = {k: v for k, v in stats.items()}
+            st.caption("Engine knowledge namespaces (domain → chunks): " +
+                       " · ".join(f"{k}:{v}" for k, v in ns.items()))
+        except Exception:
+            pass
+
     aq = st.text_input("Ask the agent pipeline",
                        placeholder="e.g. Across all documents, what are the top problems and how do we solve them?")
     if st.button("▶️ Run pipeline") and aq:
-        stages, ev_tokens = {}, 0
-        t = time.perf_counter(); dom = classify_domain(aq)
-        stages["route"] = (time.perf_counter() - t) * 1000
-        t = time.perf_counter(); _ = guard.check_pii(aq)
-        stages["guard"] = (time.perf_counter() - t) * 1000
-        # retrieve across ALL uploaded docs
-        t = time.perf_counter()
-        r = st.session_state.retriever; ret = []
-        if r is not None:
-            try: ret = r.search(aq, top_k=5)
-            except Exception: ret = []
-        stages["retrieve"] = (time.perf_counter() - t) * 1000
-        ctx = "\n\n".join(f"[Source: {h['source']}]\n{h['text']}" for h in ret)
-        # map evidence sources -> domains (multi-doc / multi-domain view)
-        dom_by_name = {d["name"]: d.get("domain", "General")
-                       for d in st.session_state.documents}
-        evidence = []
-        for h in ret:
-            nm = h.get("source", "?")
-            if nm not in [e["source"] for e in evidence]:
-                evidence.append({"source": nm, "domain": dom_by_name.get(nm, "General")})
-        # generate (grounded in the retrieved multi-doc context)
-        t = time.perf_counter()
-        ans_text = ""
-        prompt = (f"Documents (multiple sources may span different domains):\n{ctx}\n\n"
-                  f"Question: {aq}\nAnswer directly, cite which document/domain each "
-                  "point draws from, and give proposed solutions and insights.")
-        if online and hasattr(client, "complete"):
+        if engine_mode:
+            # ---- REAL LangGraph Engine graph over the fed documents ----
+            feed_engine_docs()
+            eng = get_engine()
+            t = time.perf_counter()
             try:
-                ans_text = client.complete(SYSTEM_SOLUTIONS, prompt) or ""
-                ev_tokens = int(getattr(client, "last_tokens", 0) or 0)
+                turn = eng.ask_graph(aq)
+                if getattr(turn, "status", "") == "ask_domain":
+                    # single-shot run: confirm the router's suggested domain (or the
+                    # query's classified domain) so the graph proceeds to an answer
+                    cd = getattr(turn, "domain", None) or \
+                        ENGINE_DOMAIN_MAP.get(classify_domain(aq), "general")
+                    turn = eng.ask_graph(aq, confirmed_domain=cd)
+            except Exception as ex:
+                turn = None; _err = str(ex)
+            total = (time.perf_counter() - t) * 1000
+            if turn is not None:
+                a = getattr(turn, "answer", None)
+                ans_text = a.text if a else (getattr(turn, "message", "") or "(no answer)")
+                dom = getattr(turn, "domain", None) or classify_domain(aq)
+                fups = list(getattr(turn, "follow_ups", []) or [])
+            else:
+                ans_text, dom, fups = f"(engine error: {_err})", classify_domain(aq), []
+            # context the graph retrieved (same store.retrieve) for RAGAS + evidence
+            ctx_chunks, evidence = [], []
+            try:
+                for ch, _score in eng.store.retrieve(aq, dom):
+                    ctx_chunks.append(ch.text)
+                    src = getattr(ch, "source", None) or getattr(ch, "section", "?")
+                    if src not in [e["source"] for e in evidence]:
+                        evidence.append({"source": src, "domain": dom})
             except Exception:
-                ans_text = ""
-        if not ans_text:
-            resp = client.answer_question(ctx, aq,
-                                          allow_general_knowledge=not bool(st.session_state.documents))
-            ans_text = resp.get("answer", "") or "(no answer)"
-            ev_tokens = int(resp.get("tokens", 0) or 0)
-        if not ev_tokens:      # offline estimate (~4 chars/token)
-            ev_tokens = (len(prompt) + len(ans_text)) // 4
-        stages["generate"] = (time.perf_counter() - t) * 1000
-        # suggest
-        t = time.perf_counter(); fups = followups(aq, ans_text)
-        stages["suggest"] = (time.perf_counter() - t) * 1000
-        total = sum(stages.values())
-        # record history for production metrics
+                pass
+            ctx = "\n\n".join(ctx_chunks)
+            tokens = int(getattr(eng.llm, "last_tokens", 0) or 0) or (len(aq) + len(ans_text)) // 4
+            stages = None
+        else:
+            # ---- Instrumented per-stage pipeline over the UI retriever ----
+            stages, tokens = {}, 0
+            t = time.perf_counter(); dom = classify_domain(aq)
+            stages["route"] = (time.perf_counter() - t) * 1000
+            t = time.perf_counter(); _ = guard.check_pii(aq)
+            stages["guard"] = (time.perf_counter() - t) * 1000
+            t = time.perf_counter()
+            r = st.session_state.retriever; ret = []
+            if r is not None:
+                try: ret = r.search(aq, top_k=5)
+                except Exception: ret = []
+            stages["retrieve"] = (time.perf_counter() - t) * 1000
+            ctx = "\n\n".join(f"[Source: {h['source']}]\n{h['text']}" for h in ret)
+            dom_by_name = {d["name"]: d.get("domain", "General")
+                           for d in st.session_state.documents}
+            evidence = []
+            for h in ret:
+                nm = h.get("source", "?")
+                if nm not in [e["source"] for e in evidence]:
+                    evidence.append({"source": nm, "domain": dom_by_name.get(nm, "General")})
+            t = time.perf_counter(); ans_text = ""
+            prompt = (f"Documents (sources may span domains):\n{ctx}\n\nQuestion: {aq}\n"
+                      "Answer directly, cite which document/domain each point draws from, "
+                      "and give proposed solutions and insights.")
+            if online and hasattr(client, "complete"):
+                try:
+                    ans_text = client.complete(SYSTEM_SOLUTIONS, prompt) or ""
+                    tokens = int(getattr(client, "last_tokens", 0) or 0)
+                except Exception:
+                    ans_text = ""
+            if not ans_text:
+                resp = client.answer_question(ctx, aq,
+                    allow_general_knowledge=not bool(st.session_state.documents))
+                ans_text = resp.get("answer", "") or "(no answer)"
+                tokens = int(resp.get("tokens", 0) or 0)
+            if not tokens:
+                tokens = (len(prompt) + len(ans_text)) // 4
+            stages["generate"] = (time.perf_counter() - t) * 1000
+            t = time.perf_counter(); fups = followups(aq, ans_text)
+            stages["suggest"] = (time.perf_counter() - t) * 1000
+
+        total = sum(stages.values()) if stages else total
         st.session_state.setdefault("_agent_lat", []).append(round(total, 1))
         st.session_state["_agent_lat"] = st.session_state["_agent_lat"][-50:]
-        st.session_state.setdefault("_agent_tok", []).append(int(ev_tokens))
+        st.session_state.setdefault("_agent_tok", []).append(int(tokens))
         st.session_state["_agent_tok"] = st.session_state["_agent_tok"][-50:]
         st.session_state["_agent_last"] = {"dom": dom, "ans": ans_text, "fups": fups,
                                            "stages": stages, "total": total, "ctx": ctx,
-                                           "aq": aq, "tokens": ev_tokens,
-                                           "evidence": evidence}
-        audit("AGENT_PIPELINE", f"{dom} · {total:.0f}ms · {ev_tokens} tok · "
-              f"{len(evidence)} sources")
+                                           "aq": aq, "tokens": tokens, "evidence": evidence,
+                                           "engine": engine_mode}
+        audit("AGENT_PIPELINE", f"{'engine' if engine_mode else 'instrumented'} · {dom} · "
+              f"{total:.0f}ms · {tokens} tok · {len(evidence)} sources")
 
     last = st.session_state.get("_agent_last")
     if last:
-        st.markdown(f'**Query domain:** <span class="pf-dom">{last["dom"]}</span>',
-                    unsafe_allow_html=True)
+        tag = "LangGraph Engine" if last.get("engine") else "Instrumented"
+        st.markdown(f'**Mode:** {tag} · **Domain:** '
+                    f'<span class="pf-dom">{last["dom"]}</span>', unsafe_allow_html=True)
         st.write(last["ans"])
         if last["evidence"]:
             st.markdown("**Evidence used (multi-doc / multi-domain):** " +
@@ -675,13 +767,15 @@ with tab_agents:
             st.markdown("**Follow-ups:** " + " · ".join(last["fups"]))
         st.divider()
         st.markdown("#### ⏱️ Latency & tokens (this run)")
-        cols = st.columns(5)
-        for col, k in zip(cols, ["route", "guard", "retrieve", "generate", "suggest"]):
-            col.metric(k.title(), f"{last['stages'].get(k, 0):.0f} ms")
+        if last.get("stages"):
+            cols = st.columns(5)
+            for col, k in zip(cols, ["route", "guard", "retrieve", "generate", "suggest"]):
+                col.metric(k.title(), f"{last['stages'].get(k, 0):.0f} ms")
         t1, t2 = st.columns(2)
         t1.metric("Total pipeline latency", f"{last['total']:.0f} ms")
         t2.metric("Tokens used", f"{last['tokens']:,}")
-        st.bar_chart({k: round(v, 1) for k, v in last["stages"].items()})
+        if last.get("stages"):
+            st.bar_chart({k: round(v, 1) for k, v in last["stages"].items()})
         st.markdown("#### 🧪 RAGAS evaluation (LLM-graded)")
         rag = evaluate_metrics(last["aq"], last["ans"],
                                [last["ctx"]] if last["ctx"] else [],
@@ -708,11 +802,9 @@ with tab_agents:
         g[3].metric("Total tokens", f"{sum(toks):,}")
         gc1, gc2 = st.columns(2)
         with gc1:
-            st.markdown("**Latency per run (ms)**")
-            st.line_chart({"latency_ms": lats})
+            st.markdown("**Latency per run (ms)**"); st.line_chart({"latency_ms": lats})
         with gc2:
-            st.markdown("**Tokens per run**")
-            st.bar_chart({"tokens": toks})
+            st.markdown("**Tokens per run**"); st.bar_chart({"tokens": toks})
 
 
 # =========================== COMPLIANCE MATRIX ============================ #
