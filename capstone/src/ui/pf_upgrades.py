@@ -253,6 +253,8 @@ _ASK_SOLUTION = re.compile(r"solution|propos|recommend|fix|solve|improve|address
 _ASK_INSIGHT = re.compile(r"insight|takeaway|finding|so what|implication|highlight", re.I)
 _ASK_SUMMARY = re.compile(r"summar|overview|objective|goal|what is (this|in)|about (this|the)|describe|explain", re.I)
 _ASK_CHART = re.compile(r"chart|graph|plot|trend|over \d+ year|growth|compare|number|metric", re.I)
+_ASK_DIAGRAM = re.compile(r"diagram|architect|figure|observation|component|schematic|"
+                          r"flow ?chart|design|blueprint|topology|layout|visual", re.I)
 
 
 def smart_followups(last_q: str, last_a: str, docs: list, offtopic: bool = False):
@@ -276,7 +278,15 @@ def smart_followups(last_q: str, last_a: str, docs: list, offtopic: bool = False
         if s and s not in out and len(out) < 3:
             out.append(s)
 
-    if _ASK_CHALLENGE.search(q):
+    if _ASK_DIAGRAM.search(q):
+        add("What are the key risks in this architecture/design?")
+        add("Do you need the proposed solutions for this design?")
+        add("Explain each component and how they connect")
+    elif _ASK_CHART.search(q):
+        add("Do you want the proposed solutions for this trend?")
+        add("What are the key insights from this data?")
+        add("Summarise what this means for the objective")
+    elif _ASK_CHALLENGE.search(q):
         add("Do you want the proposed solutions to these challenges?")
         add("Any insights I should check on for these?")
         add("Show me a chart of the key metrics")
@@ -292,10 +302,6 @@ def smart_followups(last_q: str, last_a: str, docs: list, offtopic: bool = False
         add("Do you need the problems in these docs?")
         add("Do you need the objectives?")
         add("Do you need the proposed solutions to it?")
-    elif _ASK_CHART.search(q):
-        add("Do you want the proposed solutions for this trend?")
-        add("What are the key insights from this data?")
-        add("Summarise what this means for the objective")
     else:
         # generic but still on the product's rails — the requested phrasing
         add("Do you need the problems in these docs?")
@@ -367,3 +373,57 @@ def bulletize(text, max_points: int = 8):
         if k not in seen:
             seen.add(k); out.append(p)
     return out[:max_points]
+
+
+# --------------------------------------------------------------------------- #
+#  Prompt-injection / jailbreak detection                                      #
+# --------------------------------------------------------------------------- #
+_RX_INJECT = re.compile(
+    r"ignore (all |your )?(previous|prior|above)[^.]*?(instruction|prompt|rule)|"
+    r"disregard[^.]*?(instruction|rule|system|guardrail|policy)|"
+    r"forget (all |your |the )?(previous|prior|above|instruction|rule)|"
+    r"(you are now|pretend to be|act as (a|an|if)|role[- ]?play as|jailbreak|"
+    r"dan mode|developer mode|do anything now|no restrictions)|"
+    r"(reveal|show|print|repeat|output|leak)[^.]*?(system prompt|your instructions|"
+    r"the prompt above|initial prompt|hidden)|"
+    r"(bypass|override|turn off|disable|ignore)[^.]*?(safety|guardrail|filter|"
+    r"restriction|rule|policy)", re.I)
+
+
+def injection_hit(query):
+    """Return a message if the query looks like a prompt-injection / jailbreak
+    attempt, else None."""
+    if _RX_INJECT.search(query or ""):
+        return ("This request tries to override the assistant's instructions or "
+                "safety rules. It was blocked and logged.")
+    return None
+
+
+# --------------------------------------------------------------------------- #
+#  PII / PHI request detection (blocks questions that ASK to reveal PII/PHI)    #
+# --------------------------------------------------------------------------- #
+_RX_PII = re.compile(
+    r"\b(account (number|no|details|balance)|acct (number|no)|routing number|ifsc|"
+    r"credit card|debit card|card number|\bcvv\b|social security|\bssn\b|aadhaar|aadhar|"
+    r"passport number|pan (number|card)|\botp\b|one[- ]time password|\bpin\b|password|"
+    r"driver'?s? licen[sc]e|date of birth|\bdob\b|home address|residential address|"
+    r"phone number of|contact (number|details) of|salary of|whose (account|card))\b", re.I)
+_RX_PHI = re.compile(
+    r"(what|which) (disease|illness|condition|ailment)|diagnos(is|ed|e)|"
+    r"medical (record|history|condition)|health (record|history)|patient'?s? "
+    r"(name|record|condition|history)|prescription|lab results|test results|"
+    r"blood report|mental health|psychiatric", re.I)
+
+
+def pii_phi_request(query):
+    """Return ('PII'|'PHI', message) if the query asks to reveal personal or health
+    identifiers, else None. Detects the REQUEST (unlike Guardrails.check_pii, which
+    only finds PII literally present in text)."""
+    q = query or ""
+    if _RX_PHI.search(q):
+        return ("PHI", "This asks for protected health information (diagnoses, "
+                       "medical/patient records). I can't reveal or extract that.")
+    if _RX_PII.search(q):
+        return ("PII", "This asks for personally identifiable information (account/"
+                       "card/ID/contact details). I can't reveal or extract that.")
+    return None
