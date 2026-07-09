@@ -1,12 +1,9 @@
-name: Capstone CI/CD - Azure
+name:  CI/CD - Azure
 
-# Runs only when the capstone folder changes.
 on:
   push:
     branches: [ main ]
-    paths: ['capstone/**', '.github/workflows/capstone-azure.yml']
   pull_request:
-    paths: ['capstone/**', '.github/workflows/capstone-azure.yml']
 
 env:
   IMAGE_NAME: proposalforge
@@ -15,9 +12,6 @@ jobs:
   # 1) Unit + integration tests (must pass before build)
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: capstone
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,9 +31,6 @@ jobs:
   # 1b) End-to-end evaluation against a real document (offline; gates deploy)
   eval:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: capstone
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -48,7 +39,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: E2E real-doc evaluation (groundedness gate)
+      - name: E2E real-doc evaluation (RAGAS-style proxies + groundedness)
         run: python eval/eval_realdoc.py
       - name: Golden-set evaluation (routing / retrieval / recall / citations)
         run: python -m eval.evaluate
@@ -84,49 +75,46 @@ jobs:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           images: ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-  # 3) Post-deploy load test with per-endpoint p95 thresholds (fails if breached)
+  # 3) Post-deploy load test with thresholds (fails the pipeline if breached)
   load-test:
     needs: build-deploy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    continue-on-error: true          # perf check is advisory: never blocks the pipeline
-    environment: production          # so it can read env-scoped secrets too
-    defaults:
-      run:
-        working-directory: capstone
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - name: Resolve target host (fail early if the app name is empty)
-        run: |
-          HOST="proposalforge-app.azurewebsites.net"
-          echo "Target host: $HOST"
-          if [ "$HOST" = ".azurewebsites.net" ]; then
-            echo "::error::AZURE_WEBAPP_NAME secret is empty. Set it (repo-level) to your web app name, e.g. proposalforge-app"
-            exit 1
-          fi
-          echo "HOST=$HOST" >> "$GITHUB_ENV"
-      - name: Wait for the app to be reachable (cold start)
-        run: |
-          for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "https://$HOST/health" || echo 000)
-            echo "attempt $i: /health -> $code"
-            [ "$code" = "200" ] && echo "app is up" && exit 0
-            sleep 10
-          done
-          echo "::warning::app did not return 200 within timeout; running load test anyway"
       - name: Install Locust
         run: pip install locust
-      - name: Load test (advisory — realistic p95 budgets, non-blocking)
+      - name: Load test with per-endpoint p95 thresholds
+        # locustfile.py enforces realistic p95 budgets (health<800ms, retrieve<1200ms,
+        # end-to-end<8s over public HTTPS) and a <1% error tolerance, exiting
+        # non-zero only if a budget or the error rate is breached. Override via env.
         env:
-          P95_HEALTH_MS: "200"
-          P95_RETRIEVE_MS: "400"
-          P95_E2E_MS: "12000"
+          P95_HEALTH_MS: "800"
+          P95_RETRIEVE_MS: "1200"
+          P95_E2E_MS: "8000"
+          LOAD_MAX_ERROR_RATE: "0.02"
         run: |
-          # Advisory perf run: prints the summary but does NOT fail the pipeline
-          # (no --exit-code-on-error, and the job is continue-on-error).
+          # brief warm-up so the first (cold-start) requests don't skew p95
+          curl -fsS --retry 5 --retry-all-errors --retry-delay 3 \
+            "https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net/health" || true
           locust -f tests/load/locustfile.py \
-            --host "https://$HOST" \
-            --headless -u 20 -r 5 -t 60s --only-summary || true
-          echo "Load test completed (advisory)."
+            --host https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net \
+            --headless -u 20 -r 5 -t 60s --only-summary
+
+  # Optional: run the same test on Azure Load Testing (cloud scale) instead of
+  # the in-CI Locust above. Requires the ALT resource (provisioned by Bicep) and
+  # an AZURE_LOAD_TEST_RESOURCE secret. Uncomment to enable.
+  # azure-load-test:
+  #   needs: build-deploy
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: azure/login@v2
+  #       with: { creds: ${{ secrets.AZURE_CREDENTIALS }} }
+  #     - uses: azure/load-testing@v1
+  #       with:
+  #         loadTestConfigFile: tests/load/loadtest.yaml
+  #         loadTestResource: ${{ secrets.AZURE_LOAD_TEST_RESOURCE }}
+  #         resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
