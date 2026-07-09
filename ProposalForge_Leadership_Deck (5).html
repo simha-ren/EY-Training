@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProposalForge Agent — Leadership Approval</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,400;1,9..144,600&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0E1120; --ink-2:#161B2E; --ink-3:#202742; --ink-4:#2B335A;
+  --gold:#F2B84B; --gold-soft:#F7D188; --gold-dim:rgba(242,184,75,.14);
+  --teal:#2FB79A; --teal-deep:#1F8A70; --teal-dim:rgba(47,183,154,.14);
+  --paper:#FBF3E3; --cream:#F7F1E6; --cream-dim:rgba(247,241,230,.62);
+  --ink-soft:#8B90A6; --ink-fog:#5A6180;
+  --red:#E5675A; --red-dim:rgba(229,103,90,.16);
+  --line:rgba(247,241,230,.10); --line-2:rgba(247,241,230,.06);
+  --shadow:0 30px 80px -30px rgba(0,0,0,.7);
+  --maxw:1180px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;background:var(--ink);color:var(--cream);
+  font-family:'Space Grotesk',sans-serif;-webkit-font-smoothing:antialiased;
+  overflow:hidden;}
+body{position:relative;}
+
+/* ---------------- Type ---------------- */
+h1,h2,h3,.display{font-family:'Fraunces',serif;font-weight:600;letter-spacing:-.015em;line-height:1.02;}
+.serif-italic{font-family:'Fraunces',serif;font-style:italic;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+.tnum{font-variant-numeric:tabular-nums;}
+.eyebrow{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:600;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--gold);
+  display:inline-flex;align-items:center;gap:12px;}
+.eyebrow::before{content:"";width:28px;height:2px;background:currentColor;opacity:.85;}
+.eyebrow.teal{color:var(--teal);}
+.eyebrow.red{color:var(--red);}
+
+/* ---------------- Deck / slides ---------------- */
+#deck{position:fixed;inset:0;}
+.slide{position:absolute;inset:0;display:flex;opacity:0;visibility:hidden;
+  transform:translateY(14px);transition:opacity .5s ease, transform .55s cubic-bezier(.22,.61,.36,1), visibility .5s;
+  overflow:hidden;}
+.slide.active{opacity:1;visibility:visible;transform:none;z-index:2;}
+.slide.prev{transform:translateY(-14px);}
+.stage{flex:1;display:flex;flex-direction:column;justify-content:center;
+  padding:64px 72px 84px 118px;max-width:var(--maxw);margin:0 auto;width:100%;
+  position:relative;}
+
+/* subtle grain / vignette */
+#deck::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+  background:radial-gradient(120% 90% at 50% 0%, transparent 55%, rgba(0,0,0,.45) 100%);}
+
+/* ---------------- Story spine (signature) ---------------- */
+#spine{position:fixed;top:0;left:0;bottom:0;width:70px;z-index:40;
+  display:flex;flex-direction:column;align-items:center;
+  padding:26px 0;background:linear-gradient(180deg, var(--ink-2), var(--ink));
+  border-right:1px solid var(--line);}
+#spine .brandmark{width:30px;height:30px;flex:0 0 auto;}
+#spine .rail{flex:1;width:2px;background:var(--line);margin:22px 0;position:relative;border-radius:2px;}
+#spine .rail-fill{position:absolute;top:0;left:0;width:100%;background:linear-gradient(180deg,var(--red),var(--gold),var(--teal));
+  border-radius:2px;transition:height .6s cubic-bezier(.22,.61,.36,1);height:0;}
+#spine .mood{position:absolute;left:50%;transform:translate(-50%,-50%);
+  width:16px;height:16px;border-radius:50%;background:var(--gold);
+  box-shadow:0 0 0 5px rgba(242,184,75,.18);transition:top .6s cubic-bezier(.22,.61,.36,1),background .6s, box-shadow .6s;top:0;}
+#spine .snum{font-family:'Fraunces',serif;font-weight:600;font-size:15px;color:var(--cream);}
+#spine .stot{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-fog);margin-top:2px;}
+#spine .moodlabel{writing-mode:vertical-rl;transform:rotate(180deg);font-size:9.5px;
+  letter-spacing:.28em;text-transform:uppercase;color:var(--ink-fog);margin-bottom:12px;font-weight:600;}
+
+/* ---------------- Nav ---------------- */
+#nav{position:fixed;bottom:22px;right:30px;z-index:45;display:flex;align-items:center;gap:14px;}
+.nav-btn{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);
+  background:var(--ink-2);color:var(--cream);cursor:pointer;display:flex;
+  align-items:center;justify-content:center;transition:.2s;}
+.nav-btn:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px);}
+.nav-btn:disabled{opacity:.3;cursor:default;transform:none;border-color:var(--line);color:var(--cream);}
+.nav-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+#progress-txt{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);min-width:52px;text-align:center;}
+
+/* progress top bar */
+#topbar{position:fixed;top:0;left:70px;right:0;height:3px;background:var(--line-2);z-index:44;}
+#topbar > span{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--teal));transition:width .5s ease;width:0;}
+
+/* jump menu */
+#dots{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:45;
+  display:flex;gap:7px;padding:8px 12px;background:rgba(22,27,46,.7);backdrop-filter:blur(10px);
+  border:1px solid var(--line);border-radius:999px;max-width:70vw;flex-wrap:wrap;justify-content:center;}
+#dots .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-4);cursor:pointer;transition:.2s;}
+#dots .dot:hover{background:var(--ink-soft);transform:scale(1.3);}
+#dots .dot.on{background:var(--gold);width:20px;border-radius:4px;}
+
+/* ---------------- Reusable bits ---------------- */
+.kicker-row{display:flex;align-items:center;gap:16px;margin-bottom:26px;flex-wrap:wrap;}
+.slide-title{font-size:clamp(30px,4.4vw,58px);color:var(--cream);}
+.slide-title .hl{color:var(--gold);}
+.slide-title .hl-t{color:var(--teal);}
+.lede{font-size:clamp(15px,1.35vw,19px);line-height:1.55;color:var(--cream-dim);max-width:60ch;margin-top:18px;}
+.grid{display:grid;gap:18px;}
+.card{background:var(--ink-2);border:1px solid var(--line);border-radius:16px;padding:22px 24px;position:relative;}
+.card.raised{background:var(--ink-3);}
+.card h3{font-size:19px;color:var(--cream);margin-bottom:8px;}
+.card p{font-size:13.5px;line-height:1.55;color:var(--cream-dim);}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;
+  font-size:12px;font-weight:600;background:var(--gold-dim);color:var(--gold-soft);border:1px solid rgba(242,184,75,.28);}
+.pill.teal{background:var(--teal-dim);color:var(--teal);border-color:rgba(47,183,154,.3);}
+.pill.red{background:var(--red-dim);color:var(--red);border-color:rgba(229,103,90,.32);}
+.pill.ghost{background:transparent;color:var(--ink-soft);border-color:var(--line);}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--teal);background:var(--teal-dim);padding:3px 8px;border-radius:6px;}
+
+/* stat blocks */
+.statrow{display:flex;gap:16px;flex-wrap:wrap;}
+.stat{flex:1;min-width:120px;background:var(--ink-2);border:1px solid var(--line);border-radius:14px;padding:18px 20px;position:relative;overflow:hidden;}
+.stat .num{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(30px,3.6vw,46px);color:var(--gold);line-height:1;}
+.stat .num.teal{color:var(--teal);}
+.stat .lbl{font-size:11.5px;letter-spacing:.06em;color:var(--ink-soft);margin-top:8px;text-transform:uppercase;font-weight:600;}
+.stat .sub{font-size:12px;color:var(--cream-dim);margin-top:4px;}
+.stat::after{content:"";position:absolute;top:0;right:0;width:70px;height:70px;background:radial-gradient(circle at 70% 30%,var(--gold-dim),transparent 70%);}
+
+/* tables */
+table.grid-tbl{width:100%;border-collapse:collapse;font-size:13.5px;}
+table.grid-tbl th{text-align:left;font-family:'Space Grotesk';font-weight:600;font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);padding:10px 14px;border-bottom:1px solid var(--line);}
+table.grid-tbl td{padding:11px 14px;border-bottom:1px solid var(--line-2);color:var(--cream-dim);vertical-align:top;line-height:1.45;}
+table.grid-tbl tr:last-child td{border-bottom:none;}
+table.grid-tbl td.k{color:var(--cream);font-weight:600;white-space:nowrap;}
+table.grid-tbl td .why{color:var(--teal);font-weight:600;}
+
+/* two-col stage */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:center;width:100%;}
+.split.narrow-left{grid-template-columns:.85fr 1.15fr;}
+.split.narrow-right{grid-template-columns:1.15fr .85fr;}
+
+/* svg diagram helpers */
+.diagram{width:100%;height:auto;overflow:visible;}
+.diagram text{font-family:'Space Grotesk',sans-serif;}
+.node-label{font-weight:600;}
+.flow-note{font-size:12.5px;color:var(--ink-soft);margin-top:16px;text-align:center;font-style:italic;font-family:'Fraunces',serif;}
+
+/* scrolly content slides that may overflow */
+.stage.scroll{justify-content:flex-start;overflow-y:auto;padding-top:52px;padding-bottom:64px;}
+.stage.scroll::-webkit-scrollbar{width:8px;}
+.stage.scroll::-webkit-scrollbar-thumb{background:var(--ink-4);border-radius:8px;}
+
+/* reveal animation for children */
+.slide.active .reveal{animation:rise .6s cubic-bezier(.22,.61,.36,1) both;}
+.slide.active .reveal:nth-child(1){animation-delay:.05s}
+.slide.active .reveal:nth-child(2){animation-delay:.12s}
+.slide.active .reveal:nth-child(3){animation-delay:.19s}
+.slide.active .reveal:nth-child(4){animation-delay:.26s}
+.slide.active .reveal:nth-child(5){animation-delay:.33s}
+.slide.active .reveal:nth-child(6){animation-delay:.4s}
+@keyframes rise{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:none;}}
+
+/* floating ambient */
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+@keyframes floatySlow{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-6px) rotate(1.5deg)}}
+@keyframes pulseSoft{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes drawIn{from{stroke-dashoffset:var(--len)}to{stroke-dashoffset:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes dashmove{to{stroke-dashoffset:-16}}
+.f-slow{animation:floatySlow 6s ease-in-out infinite;}
+.f-med{animation:floaty 4.5s ease-in-out infinite;}
+
+/* hint on first slide */
+.nav-hint{position:absolute;bottom:34px;left:118px;font-size:12.5px;color:var(--ink-fog);
+  display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;}
+.kbd{border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-size:11px;color:var(--ink-soft);background:var(--ink-2);}
+
+/* domain chips */
+.domains{display:flex;gap:12px;flex-wrap:wrap;}
+.domain-chip{display:flex;align-items:center;gap:9px;padding:9px 16px;border-radius:12px;
+  background:var(--ink-2);border:1px solid var(--line);font-size:14px;font-weight:600;color:var(--cream);}
+.domain-chip .ic{font-size:18px;}
+
+/* before/after */
+.ba{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+.ba-col{border-radius:16px;padding:24px;border:1px solid var(--line);}
+.ba-col.before{background:linear-gradient(180deg,rgba(229,103,90,.08),transparent);border-color:rgba(229,103,90,.25);}
+.ba-col.after{background:linear-gradient(180deg,rgba(47,183,154,.08),transparent);border-color:rgba(47,183,154,.28);}
+.ba-col h4{font-family:'Space Grotesk';font-size:12px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:16px;font-weight:700;}
+.ba-col.before h4{color:var(--red);}
+.ba-col.after h4{color:var(--teal);}
+.ba-item{display:flex;align-items:flex-start;gap:10px;margin-bottom:13px;font-size:14px;line-height:1.4;color:var(--cream-dim);}
+.ba-item svg{flex:0 0 18px;width:18px;height:18px;margin-top:1px;}
+
+/* code block */
+.code{background:#0A0D18;border:1px solid var(--line);border-radius:12px;padding:16px 18px;
+  font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.6;color:var(--cream-dim);overflow-x:auto;}
+.code .c{color:var(--ink-fog);}
+.code .g{color:var(--gold-soft);}
+.code .t{color:var(--teal);}
+.code .r{color:var(--red);}
+
+/* list */
+.clist{list-style:none;}
+.clist li{position:relative;padding-left:26px;margin-bottom:12px;font-size:14px;line-height:1.5;color:var(--cream-dim);}
+.clist li::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;border-radius:2px;background:var(--gold);transform:rotate(45deg);}
+.clist li.teal::before{background:var(--teal);}
+.clist li b{color:var(--cream);font-weight:600;}
+
+/* section divider slide */
+.divider .stage{align-items:flex-start;}
+.big-num{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(90px,20vw,240px);
+  line-height:.8;color:var(--ink-3);position:absolute;right:60px;bottom:20px;z-index:0;user-select:none;}
+
+/* responsive */
+@media (max-width:920px){
+  .stage{padding:48px 28px 90px 92px;}
+  #spine{width:56px;}
+  .split,.split.narrow-left,.split.narrow-right{grid-template-columns:1fr;gap:26px;}
+  .ba{grid-template-columns:1fr;}
+  .nav-hint{left:92px;}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:opacity .2s!important;}
+  .slide{transform:none!important;}
+}
+
+/* chapter spine additions (v2 — narrative, not emotion) */
+#spine .chapno{font-family:'Fraunces',serif;font-weight:700;font-size:17px;color:var(--gold);line-height:1;}
+#spine .chaptitle{writing-mode:vertical-rl;transform:rotate(180deg);font-size:10px;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--cream-dim);margin:14px 0;font-weight:600;max-height:230px;overflow:hidden;}
+#spine .mood{background:var(--gold);box-shadow:0 0 0 5px rgba(242,184,75,.16);}
+/* legend chip for diagrams */
+.legend{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:14px;font-size:11.5px;color:var(--ink-soft);}
+.legend span{display:inline-flex;align-items:center;gap:6px;}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block;}
+/* small caption tag under diagram nodes */
+.svc{font-family:"IBM Plex Mono",monospace;}
+/* UI mock chrome */
+.uichrome{background:var(--ink-2);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+.uibar{display:flex;align-items:center;gap:6px;padding:10px 14px;background:#0C1830;border-bottom:1px solid var(--line);}
+.uidot{width:10px;height:10px;border-radius:50%;}
+.uitab{padding:7px 12px;border-radius:9px 9px 0 0;font-size:11.5px;font-weight:600;color:#9FB0C4;background:#152239;white-space:nowrap;}
+.uitab.on{background:linear-gradient(135deg,#2FB79A,#57cbb2);color:#04211B;}
+
+
+/* ---- live flow animation (traveling dots + sequential node pulse) ---- */
+.flowdot{filter:drop-shadow(0 0 5px currentColor);}
+@keyframes nodePulse{
+  0%,72%,100%{filter:none;}
+  86%{filter:drop-shadow(0 0 10px currentColor) brightness(1.18);}
+}
+.flow-node-anim{animation:nodePulse 3.2s ease-in-out infinite;}
+@keyframes jackSwayTense{
+  0%,100%{transform:rotate(-1.1deg) translateY(0);}
+  30%{transform:rotate(1.1deg) translateY(1px);}
+  55%{transform:rotate(-.8deg) translateY(2px);}
+  80%{transform:rotate(.9deg) translateY(0);}
+}
+@keyframes jackBreatheCalm{
+  0%,100%{transform:scale(1) translateY(0) rotate(0deg);}
+  40%{transform:scale(1.03) translateY(-6px) rotate(-1.5deg);}
+  70%{transform:scale(1.03) translateY(-6px) rotate(1.5deg);}
+}
+.jack-tense{animation:jackSwayTense 3.6s ease-in-out infinite;transform-origin:230px 300px;}
+.jack-relaxed{animation:jackBreatheCalm 3.2s ease-in-out infinite;transform-origin:150px 168px;}
+@keyframes jackFrustrated{
+  0%,100%{transform:rotate(-1.6deg);}
+  25%{transform:rotate(1.8deg);}
+  50%{transform:rotate(-1.2deg);}
+  75%{transform:rotate(1.4deg);}
+}
+.jack-frustrated{animation:jackFrustrated 2.1s ease-in-out infinite;transform-origin:50px 50px;}
+@keyframes jackExcitedBounce{
+  0%,100%{transform:translateY(0) scale(1);}
+  50%{transform:translateY(-8px) scale(1.03);}
+}
+.jack-excited{animation:jackExcitedBounce 1.7s ease-in-out infinite;transform-origin:150px 168px;}
+
+</style>
+</head>
+<body>
+
+<div id="spine">
+  <svg class="brandmark" viewBox="0 0 40 40" fill="none">
+    <rect x="3" y="3" width="34" height="34" rx="9" fill="var(--ink-3)" stroke="var(--gold)" stroke-width="1.5"/>
+    <path d="M13 27V13h7a4.5 4.5 0 0 1 0 9h-7" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="27" cy="27" r="2.4" fill="var(--teal)"/>
+  </svg>
+  <div class="chaptitle" id="chaptitle">The Story</div>
+  <div class="rail"><div class="rail-fill" id="railfill"></div><div class="mood" id="moodDot"></div></div>
+  <div class="chapno tnum" id="snum">01</div>
+  <div class="stot tnum">/ 25</div>
+</div>
+
+<div id="topbar"><span id="topbar-fill"></span></div>
+
+<div id="deck">
+
+<!-- ===== SLIDE 1 — STORYBOARD OPENER ===== -->
+<section class="slide" data-chapter="Prologue">
+  <div class="stage" style="align-items:center;">
+    <div style="width:100%;max-width:880px;margin:0 auto;text-align:center;">
+      <div class="reveal" style="display:flex;justify-content:center;margin-bottom:6px;">
+        <svg viewBox="0 0 460 260" class="diagram" style="max-width:300px">
+          <text class="f-slow" x="50" y="46" font-family="Fraunces" font-size="26" fill="var(--gold)" opacity=".6">?</text>
+          <text class="f-med" x="392" y="60" font-family="Fraunces" font-size="20" fill="var(--teal)" opacity=".5">?</text>
+          <text class="f-slow" x="400" y="150" font-family="Fraunces" font-size="22" fill="var(--gold-soft)" opacity=".45" style="animation-delay:.6s">?</text>
+          <g class="f-med" style="animation-delay:.2s" opacity=".85">
+            <rect x="70" y="60" width="56" height="72" rx="7" fill="var(--ink-3)" stroke="var(--line)" transform="rotate(-9 98 96)"/>
+            <rect x="334" y="60" width="56" height="72" rx="7" fill="var(--ink-3)" stroke="var(--line)" transform="rotate(8 362 96)"/>
+            <rect x="202" y="18" width="56" height="72" rx="7" fill="var(--ink-3)" stroke="var(--line)"/>
+            <line x1="210" y1="34" x2="250" y2="34" stroke="var(--ink-fog)" stroke-width="2"/><line x1="210" y1="44" x2="243" y2="44" stroke="var(--ink-fog)" stroke-width="2"/><line x1="210" y1="54" x2="250" y2="54" stroke="var(--ink-fog)" stroke-width="2"/>
+          </g>
+          <g class="jack-tense" transform="translate(230,175)">
+            <circle cx="0" cy="0" r="52" fill="var(--ink-3)" stroke="var(--gold)" stroke-width="2"/>
+            <path d="M-38 -16 Q-34 -48 0 -50 Q36 -48 38 -16 Q27 -36 0 -36 Q-25 -36 -38 -16Z" fill="var(--ink-4)"/>
+            <circle cx="-16" cy="-5" r="4.5" fill="var(--cream)"/><circle cx="16" cy="-5" r="4.5" fill="var(--cream)"/>
+            <path d="M-18 24 Q0 18 18 24" fill="none" stroke="var(--cream)" stroke-width="2.6" stroke-linecap="round"/>
+            <path d="M-25 -18 L-9 -16" stroke="var(--gold-soft)" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M25 -18 L9 -16" stroke="var(--gold-soft)" stroke-width="2.2" stroke-linecap="round"/>
+          </g>
+          <text x="230" y="245" text-anchor="middle" font-size="11.5" fill="var(--ink-soft)" font-family="IBM Plex Mono" letter-spacing="2">MEET JACK · 6:52 AM</text>
+        </svg>
+      </div>
+
+      <div class="eyebrow reveal" style="justify-content:center;">A story about Jack</div>
+      <h1 class="reveal" style="font-size:clamp(40px,6.4vw,84px);margin-top:18px;">
+        ProposalForge <span class="hl">Agent</span>
+      </h1>
+      <p class="serif-italic reveal" style="margin-top:10px;font-size:clamp(15px,1.5vw,19px);color:var(--teal);">Any document. Any domain. One grounded answer.</p>
+      <p class="lede reveal" style="margin:22px auto 0;font-size:clamp(16px,1.5vw,21px);max-width:64ch;text-align:center;">
+        I built this after watching Jack lose an entire morning chasing one answer across three tools that never spoke to each other. What follows is that story, end to end —
+        <span class="serif-italic" style="color:var(--gold);">and the case I'm making for building it further.</span>
+      </p>
+      <div class="reveal" style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+        <span class="pill">Live on Microsoft Azure</span>
+        <span class="pill teal">Reads and reasons over any domain of documents</span>
+      </div>
+      <div class="reveal" style="margin-top:32px;display:flex;gap:32px;flex-wrap:wrap;justify-content:center;">
+        <div><div class="mono" style="font-size:26px;color:var(--gold);font-weight:600;">48</div><div style="font-size:11px;color:var(--ink-soft);letter-spacing:.08em;text-transform:uppercase;">tests passing</div></div>
+        <div><div class="mono" style="font-size:26px;color:var(--teal);font-weight:600;">100%</div><div style="font-size:11px;color:var(--ink-soft);letter-spacing:.08em;text-transform:uppercase;">answer eval</div></div>
+        <div><div class="mono" style="font-size:26px;color:var(--cream);font-weight:600;">&lt;5s</div><div style="font-size:11px;color:var(--ink-soft);letter-spacing:.08em;text-transform:uppercase;">p95 response</div></div>
+        <div><div class="mono" style="font-size:26px;color:var(--cream);font-weight:600;">1-click</div><div style="font-size:11px;color:var(--ink-soft);letter-spacing:.08em;text-transform:uppercase;">deploys</div></div>
+      </div>
+    </div>
+    <div class="nav-hint reveal" style="left:0;right:0;bottom:78px;text-align:center;display:flex;justify-content:center;">Press <span class="kbd">→</span> or <span class="kbd">Space</span> to begin the story</div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 2 — PROBLEM STATEMENT ===== -->
+<section class="slide" data-chapter="Ch. 1 · The Problem">
+  <div class="stage">
+    <div class="kicker-row reveal"><span class="eyebrow red">Chapter One · The Problem</span><span class="pill red">47 min lost · 12 tabs</span></div>
+    <h2 class="slide-title reveal">Jack needs one answer.<br><span class="hl">The answer lives in ten places.</span></h2>
+    <p class="lede reveal">Every morning Jack reads proposals, RFCs and policy documents by hand, jumping between systems that were never designed to talk to each other. When he asks a generic AI chatbot to help, it answers confidently and cites nothing — so he can't trust it, and starts reading all over again.</p>
+    <div class="ba reveal" style="margin-top:32px;">
+      <div class="ba-col before" style="position:relative;">
+        <svg viewBox="0 0 100 100" width="72" height="72" style="position:absolute;top:16px;right:16px;">
+          <g class="jack-frustrated">
+            <circle cx="50" cy="50" r="42" fill="var(--ink-3)" stroke="var(--red)" stroke-width="2.5"/>
+            <path d="M18 32 Q30 18 50 18 Q70 18 82 32 Q64 26 50 26 Q36 26 18 32Z" fill="var(--ink-4)"/>
+            <path d="M22 40 L36 46" stroke="var(--red)" stroke-width="3" stroke-linecap="round"/>
+            <path d="M78 40 L64 46" stroke="var(--red)" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="32" cy="52" r="4.5" fill="var(--cream)"/><circle cx="68" cy="52" r="4.5" fill="var(--cream)"/>
+            <path d="M32 72 Q50 64 68 72" fill="none" stroke="var(--red)" stroke-width="3.5" stroke-linecap="round"/>
+          </g>
+        </svg>
+        <h4>Why today's approach fails Jack</h4>
+        <p style="font-size:14.5px;color:var(--cream-dim);line-height:1.7;max-width:88%;">Reading everything by hand is <b style="color:var(--cream)">slow and inconsistent</b> — two people give two different answers to the same question. Ask a generic chatbot instead, and it answers confidently while <b style="color:var(--cream)">inventing facts</b> it can't point back to a source for. And pasting real documents into a public tool means <b style="color:var(--cream)">sensitive data walks out the door</b> — a non-starter in regulated work.</p>
+      </div>
+      <div class="ba-col after" style="display:flex;flex-direction:column;justify-content:center;position:relative;">
+        <svg viewBox="0 0 100 100" width="66" height="66" style="position:absolute;top:16px;right:16px;">
+          <g class="jack-relaxed">
+            <circle cx="50" cy="50" r="40" fill="var(--ink-3)" stroke="var(--teal)" stroke-width="2.5"/>
+            <path d="M20 32 Q32 20 50 20 Q68 20 80 32 Q64 27 50 27 Q36 27 20 32Z" fill="var(--ink-4)"/>
+            <path d="M26 40 Q32 36 38 40" stroke="var(--teal)" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+            <path d="M74 40 Q68 36 62 40" stroke="var(--teal)" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+            <circle cx="33" cy="52" r="4.2" fill="var(--cream)"/><circle cx="67" cy="52" r="4.2" fill="var(--cream)"/>
+            <path d="M32 68 Q50 80 68 68" fill="none" stroke="var(--teal)" stroke-width="3.2" stroke-linecap="round"/>
+          </g>
+        </svg>
+        <h4>What Jack actually needs</h4>
+        <p style="font-family:'Fraunces';font-style:italic;font-size:23px;line-height:1.4;color:var(--cream);max-width:85%;">"What if one place just&hellip; <span style="color:var(--teal)">knew?</span>"</p>
+        <p style="font-size:14px;color:var(--cream-dim);margin-top:16px;line-height:1.6;max-width:88%;">One question in. One trusted answer out — grounded in his own documents, cited so he can check it, and back in seconds.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 3 — MARKET & OPPORTUNITY ===== -->
+<section class="slide" data-chapter="Ch. 2 · The Opportunity">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow">Chapter Two · Market &amp; Opportunity</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(28px,3.8vw,50px);">Jack isn't one person. He's <span class="hl-t">every document-heavy team.</span></h2>
+    <p class="lede reveal">Wherever work means reading long, high-stakes documents under compliance pressure, grounded and auditable AI wins — and generic chatbots are banned. ProposalForge is built for exactly that gap, and it isn't locked to any fixed set of domains.</p>
+    <div class="grid reveal" style="grid-template-columns:repeat(4,1fr);margin-top:30px;">
+      <div class="card"><div class="domain-chip" style="border:none;padding:0;background:none;margin-bottom:12px;"><span class="ic">🌾</span><span>Agriculture</span></div><p>Scheme &amp; subsidy rules, crop-insurance terms and advisory documents field teams must interpret fast.</p></div>
+      <div class="card"><div class="domain-chip" style="border:none;padding:0;background:none;margin-bottom:12px;"><span class="ic">💰</span><span>Finance</span></div><p>Loan eligibility, products and regulatory FAQs — answers that need a verifiable evidence trail.</p></div>
+      <div class="card"><div class="domain-chip" style="border:none;padding:0;background:none;margin-bottom:12px;"><span class="ic">🏥</span><span>Healthcare</span></div><p>Coverage FAQs and cashless-claim policies where an un-sourced answer has real consequences.</p></div>
+      <div class="card" style="border-color:rgba(47,183,154,.35);background:linear-gradient(160deg,var(--teal-dim),transparent);"><div class="domain-chip" style="border:none;padding:0;background:none;margin-bottom:12px;"><span class="ic">➕</span><span style="color:var(--teal)">Any other domain</span></div><p>Legal, HR, education, logistics — feed it the documents and it reasons over them the same way.</p></div>
+    </div>
+    <div class="reveal" style="margin-top:22px;display:grid;grid-template-columns:1.3fr 1fr;gap:20px;align-items:stretch;">
+      <div class="card raised"><h3 style="color:var(--gold)">Why now — and why I'm confident in this</h3><p style="margin-top:10px;font-size:13.5px;color:var(--cream-dim);line-height:1.7;">Everyone wants the value of an LLM but can't accept hallucination or data leakage in regulated work. Grounded, cited answers with per-domain safety are the trusted middle path, and it's rarely done well. I built this to be vendor-neutral and genuinely domain-agnostic — point it at any corpus, in any field, and it reasons over it without a rebuild.</p></div>
+      <div class="card" style="text-align:center;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(160deg,var(--teal-dim),transparent);"><div style="font-family:'Fraunces';font-weight:600;font-size:clamp(28px,3.2vw,44px);color:var(--teal);line-height:1;">Any domain</div><p style="margin-top:10px;">Agriculture, finance and healthcare are live today — the architecture takes on the next domain by adding documents, not code.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 4 — OUR SOLUTION ===== -->
+<section class="slide" data-chapter="Ch. 3 · The Solution">
+  <div class="stage">
+    <div class="kicker-row reveal"><span class="eyebrow">Chapter Three · Our Solution</span><span class="pill">The turning point</span></div>
+    <div class="split narrow-left" style="align-items:center;">
+      <div>
+        <div class="reveal" style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">
+          <svg viewBox="0 0 100 100" width="58" height="58">
+            <g class="jack-relaxed">
+              <circle cx="50" cy="50" r="42" fill="var(--ink-3)" stroke="var(--teal)" stroke-width="2.5"/>
+              <path d="M18 30 Q30 17 50 17 Q70 17 82 30 Q64 25 50 25 Q36 25 18 30Z" fill="var(--ink-4)"/>
+              <path d="M24 40 Q31 35 38 40" stroke="var(--teal)" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+              <path d="M76 40 Q69 35 62 40" stroke="var(--teal)" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+              <circle cx="33" cy="53" r="4.4" fill="var(--cream)"/><circle cx="67" cy="53" r="4.4" fill="var(--cream)"/>
+              <path d="M30 70 Q50 84 70 70" fill="none" stroke="var(--teal)" stroke-width="3.3" stroke-linecap="round"/>
+            </g>
+          </svg>
+          <p style="font-family:'Fraunces';font-style:italic;font-size:15px;color:var(--teal-deep);margin:0;">Jack, the first time he asks it a question</p>
+        </div>
+        <h2 class="slide-title reveal">The assistant<br>Jack can <span class="hl-t">trust.</span></h2>
+        <p class="lede reveal">A <b style="color:var(--cream)">domain-aware, grounded AI assistant</b> that reads Jack's own documents, answers only from what it retrieves, and shows its citations — so every answer can be checked in a click.</p>
+        <div class="reveal" style="margin-top:24px;display:grid;gap:14px;">
+          <div style="display:flex;gap:14px;align-items:flex-start;"><div class="tag" style="margin-top:2px;">01</div><div><b style="color:var(--cream);font-size:15px;">Ask once</b><p style="font-size:13.5px;color:var(--cream-dim);margin-top:2px;">One box, across all his documents — no choosing which system to open.</p></div></div>
+          <div style="display:flex;gap:14px;align-items:flex-start;"><div class="tag" style="margin-top:2px;">02</div><div><b style="color:var(--cream);font-size:15px;">Domain-aware</b><p style="font-size:13.5px;color:var(--cream-dim);margin-top:2px;">Detects the topic to apply the right knowledge &amp; safety rules; if unsure, it asks.</p></div></div>
+          <div style="display:flex;gap:14px;align-items:flex-start;"><div class="tag" style="margin-top:2px;">03</div><div><b style="color:var(--cream);font-size:15px;">Cited &amp; grounded</b><p style="font-size:13.5px;color:var(--cream-dim);margin-top:2px;">Every claim traces to a source line — verifiable, not guessed.</p></div></div>
+        </div>
+      </div>
+      <div class="reveal">
+        <div class="card" style="background:linear-gradient(180deg,rgba(229,103,90,.06),transparent);border-color:rgba(229,103,90,.2);margin-bottom:16px;">
+          <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--red);font-weight:700;margin-bottom:12px;">A generic chatbot</div>
+          <p style="font-size:14px;color:var(--cream-dim);">🏥 "Please check your policy document." <span style="color:var(--red)">(no source)</span></p>
+          <p style="font-size:14px;color:var(--cream-dim);margin-top:6px;">💰 "Consult an advisor."</p>
+        </div>
+        <div class="card" style="background:linear-gradient(180deg,rgba(47,183,154,.09),transparent);border-color:rgba(47,183,154,.32);">
+          <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;">ProposalForge <span style="font-size:14px;">✦</span></div>
+          <p style="font-size:14px;color:var(--cream);">🏥 "Cashless is capped at ₹6,000/day." <span class="tag" style="color:var(--teal)">Policy p.4</span></p>
+          <p style="font-size:14px;color:var(--cream);margin-top:8px;">💰 "Yes — you meet the criteria." <span class="tag" style="color:var(--teal)">Product doc</span></p>
+        </div>
+        <p style="text-align:center;margin-top:14px;font-family:'Fraunces';font-style:italic;color:var(--gold);font-size:15px;">Answered in under 3 seconds.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 5 — PRD / FUNCTIONAL GOALS ===== -->
+<section class="slide" data-chapter="Ch. 3 · Requirements">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow">PRD · Requirements &amp; Functional Goals</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(28px,3.8vw,48px);">Five promises — and how we keep them</h2>
+    <p class="lede reveal">Each goal is testable, maps to shipped code, and is enforced automatically in delivery.</p>
+    <div class="grid reveal" style="grid-template-columns:repeat(3,1fr);margin-top:28px;">
+      <div class="card"><div class="tag">FG-1</div><h3 style="margin-top:10px;">Grounded &amp; cited</h3><p>Answers are built only from retrieved source text and surface their citations. No source → no claim.</p></div>
+      <div class="card"><div class="tag">FG-2</div><h3 style="margin-top:10px;">Domain-aware routing</h3><p>Detects the topic to pick the right knowledge base; when unsure, it asks rather than guesses.</p></div>
+      <div class="card"><div class="tag">FG-3</div><h3 style="margin-top:10px;">Multi-document analysis</h3><p>Reads several documents at once and answers across all of them in one pipeline call.</p></div>
+      <div class="card"><div class="tag">FG-4</div><h3 style="margin-top:10px;">Always available</h3><p>Fails over across AI providers, then to an offline mode — never goes dark, even with zero keys.</p></div>
+      <div class="card"><div class="tag">FG-5</div><h3 style="margin-top:10px;">Safe &amp; auditable</h3><p>Guardrails for PII/PHI, confidence &amp; disclaimers, plus a full audit trail for every action.</p></div>
+      <div class="card raised" style="display:flex;flex-direction:column;justify-content:center;"><h3 style="color:var(--gold)">The performance bar</h3><p style="margin-top:6px;">p95 &lt; 5s end-to-end · health &lt; 50ms · search &lt; 150ms · autoscale 1→5 · full observability.</p></div>
+    </div>
+    <div class="reveal" style="margin-top:22px;">
+      <table class="grid-tbl">
+        <thead><tr><th>Goal</th><th>Acceptance criterion (testable)</th><th>Shipped in</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Grounded answers</td><td>Quality gate passes; answer carries citations to retrieved sources</td><td><span class="tag">agents/generation.py</span></td></tr>
+          <tr><td class="k">Routing</td><td>Confident → answer · plausible → confirm chip · weak → ask user</td><td><span class="tag">orchestrator/router.py</span></td></tr>
+          <tr><td class="k">Availability</td><td>Claude → Groq → offline extractive, transparently labelled</td><td><span class="tag">agents/llm_backend.py</span></td></tr>
+          <tr><td class="k">Safety</td><td>PII/PHI · confidence · policy · relevance checks on every answer</td><td><span class="tag">common/guardrails.py</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 6 — KEY FEATURES (with real UI) ===== -->
+<section class="slide" data-chapter="Ch. 4 · What We Built">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow">Chapter Four · Key Features</span><span class="pill teal">Shipped &amp; running on Azure</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(26px,3.4vw,44px);">Not just a chatbot — an <span class="hl-t">agent your team builds</span></h2>
+    <p class="lede reveal">The product ships as <b style="color:var(--cream)">ProposalForge Agent</b>: give it instructions, add your documents as Knowledge, and test it live. Seven workspaces cover the whole job.</p>
+
+    <div class="split narrow-right reveal" style="margin-top:22px;align-items:stretch;gap:28px;">
+      <!-- real UI mock -->
+      <div class="uichrome">
+        <div class="uibar"><span class="uidot" style="background:#E5675A"></span><span class="uidot" style="background:#E9950C"></span><span class="uidot" style="background:#2FB79A"></span><span style="margin-left:10px;font-size:11px;color:#7C8BA0;font-family:'IBM Plex Mono'">ProposalForge Agent · Azure</span></div>
+        <div style="padding:16px 18px;">
+          <div style="background:linear-gradient(120deg,#16233B,#0F9AA8 70%);border-radius:12px;padding:14px 16px;text-align:center;color:#fff;">
+            <div style="font-weight:800;font-size:17px;">🤖 ProposalForge Agent</div>
+            <div style="font-size:11px;opacity:.9;margin-top:2px;">Grounded answers across all your documents</div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:14px;flex-wrap:wrap;">
+            <span class="uitab on">🏠 Overview</span><span class="uitab">🤖 Agents</span><span class="uitab">📋 Compliance</span><span class="uitab">🧪 Evaluation</span>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+            <span class="uitab">📊 Analytics</span><span class="uitab">🧾 Activity</span><span class="uitab">✅ Test Suites</span>
+          </div>
+          <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div style="background:#152239;border-radius:9px;padding:10px;"><div style="font-size:10px;color:#7C8BA0;">MODEL</div><div style="font-size:13px;color:#DCE6F0;font-weight:600;">Claude · Groq</div></div>
+            <div style="background:#152239;border-radius:9px;padding:10px;"><div style="font-size:10px;color:#7C8BA0;">KNOWLEDGE</div><div style="font-size:13px;color:#DCE6F0;font-weight:600;">multi-file upload</div></div>
+          </div>
+          <div style="margin-top:8px;background:#152239;border-radius:9px;padding:10px 12px;">
+            <div style="font-size:12px;color:#9FB0C4;">💬 "Is this claim cashless-eligible?"</div>
+            <div style="font-size:12px;color:#DCE6F0;margin-top:6px;">✅ Yes — capped at ₹6,000/day. <span style="color:#2FB79A;font-family:'IBM Plex Mono';font-size:10px;">policy.pdf</span></div>
+            <div style="font-size:10px;color:#7C8BA0;margin-top:4px;">confidence 94% · 6 sources · 2.8s</div>
+          </div>
+        </div>
+      </div>
+      <!-- feature grid -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-content:start;">
+        <div class="card" style="padding:14px 16px;"><span style="font-size:19px;">🧭</span><h3 style="margin-top:4px;font-size:15px;">Domain-aware router</h3><p style="font-size:12.5px;">Applies the right knowledge &amp; rules per question.</p></div>
+        <div class="card" style="padding:14px 16px;"><span style="font-size:19px;">✍️</span><h3 style="margin-top:4px;font-size:15px;">Grounded, cited answers</h3><p style="font-size:12.5px;">Composed from evidence with inline citations.</p></div>
+        <div class="card" style="padding:14px 16px;"><span style="font-size:19px;">📋</span><h3 style="margin-top:4px;font-size:15px;">Compliance matrix</h3><p style="font-size:12.5px;">RFP requirements traced to coverage &amp; gaps.</p></div>
+        <div class="card" style="padding:14px 16px;"><span style="font-size:19px;">📊</span><h3 style="margin-top:4px;font-size:15px;">Live evaluation</h3><p style="font-size:12.5px;">RAGAS + accuracy scored on every run.</p></div>
+        <div class="card" style="padding:14px 16px;"><span style="font-size:19px;">🛡️</span><h3 style="margin-top:4px;font-size:15px;">Guardrails</h3><p style="font-size:12.5px;">PII/PHI, confidence, disclaimer &amp; relevance.</p></div>
+        <div class="card" style="padding:14px 16px;"><span style="font-size:19px;">🧾</span><h3 style="margin-top:4px;font-size:15px;">Full audit trail</h3><p style="font-size:12.5px;">Every action logged for compliance replay.</p></div>
+      </div>
+    </div>
+    <p class="flow-note reveal">Also inside: multi-format ingestion (PDF · DOCX · PPTX · XLSX · CSV · MD), Azure Document Intelligence for tables &amp; figures, follow-up suggestions, and a built-in Test Suites runner.</p>
+  </div>
+</section>
+
+<!-- ===== SLIDE 7 — KIRO FEATURE (COMPLIANCE) ===== -->
+<section class="slide" data-chapter="Ch. 4 · Built with Kiro">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow teal">How we built with Kiro</span><span class="pill teal">Spec-Driven Development</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(26px,3.4vw,44px);">One feature, built the disciplined way: <span class="hl-t">the Compliance Matrix</span></h2>
+    <p class="lede reveal">We used Kiro's <b style="color:var(--cream)">Spec-Driven Development</b> — a 3-phase workflow — to build our compliance feature. Requirements are written in EARS form, then designed, then executed task-by-task with a Definition of Done.</p>
+
+    <div class="reveal" style="margin-top:22px;">
+      <svg viewBox="0 0 1000 120" class="diagram">
+        <defs><marker id="ark" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6" fill="var(--gold)"/></marker></defs>
+        <rect x="20" y="25" width="270" height="70" rx="13" fill="var(--ink-2)" stroke="var(--gold)" stroke-width="1.5" class="flow-node-anim" style="animation-delay:0.0s"/><text x="42" y="52" fill="var(--gold)" font-size="12" font-weight="700" letter-spacing="1">PHASE 1 · REQUIREMENTS</text><text x="42" y="76" fill="var(--cream-dim)" font-size="12" font-family="IBM Plex Mono">EARS user stories · ✅ approved</text>
+        <line x1="290" y1="60" x2="358" y2="60" stroke="var(--gold)" stroke-width="2" marker-end="url(#ark)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.0s" path="M 290,60 L 358,60"/></circle>
+        <rect x="363" y="25" width="270" height="70" rx="13" fill="var(--ink-2)" stroke="var(--teal)" stroke-width="1.5" class="flow-node-anim" style="animation-delay:0.32s"/><text x="385" y="52" fill="var(--teal)" font-size="12" font-weight="700" letter-spacing="1">PHASE 2 · DESIGN</text><text x="385" y="76" fill="var(--cream-dim)" font-size="12" font-family="IBM Plex Mono">data model · algorithm · ✅</text>
+        <line x1="633" y1="60" x2="701" y2="60" stroke="var(--gold)" stroke-width="2" marker-end="url(#ark)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.28s" path="M 633,60 L 701,60"/></circle>
+        <rect x="706" y="25" width="274" height="70" rx="13" fill="var(--ink-3)" stroke="var(--gold-soft)" stroke-width="1.5" class="flow-node-anim" style="animation-delay:0.64s"/><text x="728" y="52" fill="var(--gold-soft)" font-size="12" font-weight="700" letter-spacing="1">PHASE 3 · TASKS</text><text x="728" y="76" fill="var(--cream-dim)" font-size="12" font-family="IBM Plex Mono">[x] executed · DoD met · tested</text>
+      </svg>
+    </div>
+
+    <div class="split" style="margin-top:20px;align-items:stretch;">
+      <div class="card reveal" style="background:linear-gradient(160deg,var(--teal-dim),transparent);">
+        <div class="tag" style="color:var(--teal)">📋 The Compliance / Requirements Traceability Matrix</div>
+        <p style="margin-top:10px;font-size:13.5px;">Paste an RFP and your proposal. It extracts every requirement, then traces each to your response with a coverage status and the matching evidence — turning a manual, error-prone audit into one click.</p>
+        <div style="margin-top:12px;display:grid;gap:6px;">
+          <div style="display:flex;align-items:center;gap:8px;"><span class="pill teal" style="font-size:10px;">Covered</span><span style="font-size:12px;color:var(--cream-dim)">key terms strongly present + evidence snippet</span></div>
+          <div style="display:flex;align-items:center;gap:8px;"><span class="pill" style="font-size:10px;">Partial</span><span style="font-size:12px;color:var(--cream-dim)">some key terms present</span></div>
+          <div style="display:flex;align-items:center;gap:8px;"><span class="pill red" style="font-size:10px;">Missing</span><span style="font-size:12px;color:var(--cream-dim)">no meaningful match — flagged as a gap</span></div>
+        </div>
+      </div>
+      <div class="reveal" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card"><div class="tag">Why it's a strong Kiro fit</div><p style="margin-top:10px;font-size:13.5px;color:var(--cream-dim);line-height:1.7;">Its core is deterministic — the same inputs always give the same matrix, and it needs no API key at all; an LLM only steps in to summarise the gaps in plain language. Every requirement gets a stable ID and an evidence trail, so it's auditable by design, not by afterthought.</p></div>
+        <div class="card raised" style="text-align:center;"><div style="font-family:'Fraunces';font-weight:600;font-size:32px;color:var(--teal);">covered ÷ total</div><p style="font-size:12.5px;color:var(--cream-dim);margin-top:4px;">a single compliance % + a prioritised, worst-first gap list</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 8 — SYSTEM ARCHITECTURE ===== -->
+<section class="slide" data-chapter="Ch. 5 · Architecture">
+  <div class="stage">
+    <div class="kicker-row reveal"><span class="eyebrow">Chapter Five · System Architecture</span><span class="pill">One container on Azure</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">Simple to run, built on a proven stack</h2>
+    <div class="reveal" style="margin-top:18px;">
+      <svg viewBox="0 0 1120 450" class="diagram">
+        <defs>
+          <marker id="b2" markerWidth="12" markerHeight="12" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8" fill="var(--ink-soft)"/></marker>
+          <marker id="b2g" markerWidth="12" markerHeight="12" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8" fill="var(--gold)"/></marker>
+        </defs>
+        <!-- container boundary -->
+        <rect x="150" y="18" width="600" height="414" rx="18" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="6 6"/>
+        <text x="168" y="42" fill="var(--ink-fog)" font-size="11.5" font-family="IBM Plex Mono" letter-spacing="2">SINGLE CONTAINER · nginx :8080</text>
+        <!-- users -->
+        <rect x="8" y="190" width="118" height="70" rx="12" fill="var(--teal)" class="flow-node-anim" style="animation-delay:0.0s"/><text x="67" y="220" text-anchor="middle" fill="#08201B" font-size="15" font-weight="700">Users</text><text x="67" y="240" text-anchor="middle" fill="#0B3329" font-size="10.5">web browser</text>
+        <line x1="126" y1="225" x2="185" y2="225" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#b2)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.0s" path="M 126,225 L 185,225"/></circle>
+        <!-- nginx -->
+        <rect x="188" y="190" width="120" height="70" rx="12" fill="var(--ink-3)" stroke="var(--gold)" stroke-width="1.5" class="flow-node-anim" style="animation-delay:0.32s"/><text x="248" y="218" text-anchor="middle" fill="var(--gold)" font-size="14" font-weight="700">nginx</text><text x="248" y="238" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5">reverse proxy</text>
+        <!-- UI + API -->
+        <line x1="308" y1="208" x2="360" y2="160" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#b2)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.28s" path="M 308,208 L 360,160"/></circle><line x1="308" y1="242" x2="360" y2="290" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#b2)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.56s" path="M 308,242 L 360,290"/></circle>
+        <rect x="365" y="128" width="150" height="62" rx="12" fill="var(--ink-2)" stroke="var(--line)" class="flow-node-anim" style="animation-delay:0.64s"/><text x="440" y="154" text-anchor="middle" fill="var(--cream)" font-size="13.5" font-weight="600">Streamlit UI</text><text x="440" y="173" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5 " class="svc">7-tab agent app</text>
+        <rect x="365" y="260" width="150" height="62" rx="12" fill="var(--ink-2)" stroke="var(--line)" class="flow-node-anim" style="animation-delay:0.96s"/><text x="440" y="286" text-anchor="middle" fill="var(--cream)" font-size="13.5" font-weight="600">FastAPI</text><text x="440" y="305" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5" class="svc">/api/v1</text>
+        <!-- orchestrator (LangGraph) -->
+        <line x1="515" y1="159" x2="582" y2="205" stroke="var(--gold)" stroke-width="2" marker-end="url(#b2g)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.84s" path="M 515,159 L 582,205"/></circle><line x1="515" y1="291" x2="582" y2="245" stroke="var(--gold)" stroke-width="2" marker-end="url(#b2g)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="1.12s" path="M 515,291 L 582,245"/></circle>
+        <rect x="585" y="188" width="150" height="74" rx="12" fill="var(--gold)" class="flow-node-anim" style="animation-delay:1.28s"/><text x="660" y="214" text-anchor="middle" fill="#2A1D00" font-size="14" font-weight="700">LangGraph</text><text x="660" y="233" text-anchor="middle" fill="#4A3400" font-size="10.5">orchestrator</text><text x="660" y="249" text-anchor="middle" fill="#4A3400" font-size="10" class="svc">5-step pipeline</text>
+        <!-- external services (right, outside container) -->
+        <line x1="735" y1="205" x2="828" y2="90"  stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#b2)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="1.4s" path="M 735,205 L 828,90"/></circle>
+        <line x1="735" y1="215" x2="828" y2="165" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#b2)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="1.68s" path="M 735,215 L 828,165"/></circle>
+        <line x1="735" y1="230" x2="828" y2="240" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#b2)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="1.96s" path="M 735,230 L 828,240"/></circle>
+        <line x1="735" y1="245" x2="828" y2="315" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#b2)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="2.24s" path="M 735,245 L 828,315"/></circle>
+        <rect x="832" y="62" width="280" height="58" rx="12" fill="var(--teal-dim)" stroke="var(--teal)" stroke-width="1.2" class="flow-node-anim" style="animation-delay:1.6s"/><text x="850" y="88" fill="var(--teal)" font-size="13.5" font-weight="700">AI models</text><text x="850" y="107" fill="var(--ink-soft)" font-size="10.5" class="svc">Claude · Groq</text>
+        <rect x="832" y="138" width="280" height="58" rx="12" fill="var(--teal-dim)" stroke="var(--teal)" stroke-width="1.2" class="flow-node-anim" style="animation-delay:1.92s"/><text x="850" y="164" fill="var(--teal)" font-size="13.5" font-weight="700">Pinecone</text><text x="850" y="183" fill="var(--ink-soft)" font-size="10.5" class="svc">vector search (RAG)</text>
+        <rect x="832" y="214" width="280" height="52" rx="12" fill="var(--teal-dim)" stroke="var(--teal)" stroke-width="1.2" class="flow-node-anim" style="animation-delay:2.24s"/><text x="850" y="238" fill="var(--teal)" font-size="13.5" font-weight="700">Neon Postgres</text><text x="850" y="255" fill="var(--ink-soft)" font-size="10.5" class="svc">audit · records · users</text>
+        <rect x="832" y="286" width="280" height="58" rx="12" fill="var(--teal-dim)" stroke="var(--teal)" stroke-width="1.2" class="flow-node-anim" style="animation-delay:2.56s"/><text x="850" y="312" fill="var(--teal)" font-size="13.5" font-weight="700">Azure Doc Intelligence</text><text x="850" y="331" fill="var(--ink-soft)" font-size="10.5" class="svc">layout · tables · figures</text>
+        <!-- monitoring + delivery bottom -->
+        <rect x="585" y="286" width="150" height="52" rx="12" fill="var(--ink-2)" stroke="var(--line)" class="flow-node-anim" style="animation-delay:2.88s"/><text x="660" y="310" text-anchor="middle" fill="var(--cream)" font-size="12.5" font-weight="600">Azure Monitor</text><text x="660" y="327" text-anchor="middle" fill="var(--ink-soft)" font-size="10" class="svc">App Insights traces</text>
+        <line x1="660" y1="262" x2="660" y2="284" stroke="var(--ink-fog)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <!-- delivery pipeline -->
+        <rect x="188" y="360" width="330" height="56" rx="12" fill="var(--ink-2)" stroke="var(--gold)" stroke-width="1.1" class="flow-node-anim" style="animation-delay:3.2s"/><text x="353" y="384" text-anchor="middle" fill="var(--gold-soft)" font-size="12.5" font-weight="700">GitHub Actions → ACR → Azure Web App</text><text x="353" y="402" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5" class="svc">CI/CD · build image · deploy · load-test</text>
+        <line x1="353" y1="360" x2="308" y2="262" stroke="var(--ink-fog)" stroke-width="1.4" stroke-dasharray="4 4" marker-end="url(#b2)"/>
+      </svg>
+    </div>
+    <p class="flow-note reveal">One image, one Web App, one health check — nginx serves the UI + API together and it autoscales 1 → 5 on load.</p>
+  </div>
+</section>
+
+<!-- ===== SLIDE 9 — AGENTS WORKFLOW ===== -->
+<section class="slide" data-chapter="Ch. 5 · The Agents">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow">System Architecture · The Agents</span><span class="pill teal">LangGraph</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(26px,3.4vw,44px);">Five agents, each with one job to do well</h2>
+    <p class="lede reveal">I didn't want one giant model trying to do everything at once. So I gave the work to five focused agents, each responsible for a single part of the answer, coordinated by LangGraph — here's the order they actually run in, and what each one is doing.</p>
+
+    <div class="reveal" style="margin-top:18px;">
+      <svg viewBox="0 0 1080 130" class="diagram">
+        <defs><marker id="ag5" markerWidth="11" markerHeight="11" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="var(--gold)"/></marker></defs>
+        <g font-size="13" font-weight="600">
+          <rect x="20" y="20" width="185" height="66" rx="13" fill="var(--ink-2)" stroke="var(--gold)" stroke-width="1.5" class="flow-node-anim" style="animation-delay:0.0s"/><text x="112" y="48" text-anchor="middle" fill="var(--gold)">① Router</text><text x="112" y="66" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5" font-weight="400">picks the domain</text>
+          <rect x="240" y="20" width="185" height="66" rx="13" fill="var(--ink-2)" stroke="var(--red)" stroke-width="1.5" class="flow-node-anim" style="animation-delay:0.32s"/><text x="332" y="48" text-anchor="middle" fill="var(--red)">② Guardrails</text><text x="332" y="66" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5" font-weight="400">checks it's safe</text>
+          <rect x="460" y="20" width="185" height="66" rx="13" fill="var(--ink-2)" stroke="var(--teal)" stroke-width="1.5" class="flow-node-anim" style="animation-delay:0.64s"/><text x="552" y="48" text-anchor="middle" fill="var(--teal)">③ Retrieval</text><text x="552" y="66" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5" font-weight="400">finds the evidence</text>
+          <rect x="680" y="20" width="185" height="66" rx="13" fill="var(--ink-3)" stroke="var(--gold)" stroke-width="1.6" class="flow-node-anim" style="animation-delay:0.96s"/><text x="772" y="48" text-anchor="middle" fill="var(--gold)">④ Generation</text><text x="772" y="66" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5" font-weight="400">writes the answer</text>
+          <rect x="900" y="20" width="160" height="66" rx="13" fill="var(--ink-2)" stroke="var(--teal)" stroke-width="1.5" class="flow-node-anim" style="animation-delay:1.28s"/><text x="980" y="48" text-anchor="middle" fill="var(--teal)">⑤ Suggestion</text><text x="980" y="66" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5" font-weight="400">proposes next</text>
+        </g>
+        <g stroke="var(--gold)" stroke-width="2.2">
+          <line x1="205" y1="53" x2="238" y2="53" marker-end="url(#ag5)"/><circle r="4" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.0s" path="M 205,53 L 238,53"/></circle>
+          <line x1="425" y1="53" x2="458" y2="53" marker-end="url(#ag5)"/><circle r="4" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.28s" path="M 425,53 L 458,53"/></circle>
+          <line x1="645" y1="53" x2="678" y2="53" marker-end="url(#ag5)"/><circle r="4" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.56s" path="M 645,53 L 678,53"/></circle>
+          <line x1="865" y1="53" x2="898" y2="53" marker-end="url(#ag5)"/><circle r="4" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.84s" path="M 865,53 L 898,53"/></circle>
+        </g>
+        <text x="540" y="112" text-anchor="middle" fill="var(--ink-fog)" font-size="11" font-family="IBM Plex Mono">this is the exact order I run them in, every single time</text>
+      </svg>
+    </div>
+
+    <div class="grid reveal" style="grid-template-columns:repeat(3,1fr);margin-top:22px;">
+      <div class="card" style="border-color:rgba(242,184,75,.3);">
+        <div class="tag">Agent 01</div>
+        <h3 style="margin-top:10px;color:var(--gold)">The Router</h3>
+        <p style="margin-top:6px;">Reads the question first and decides which domain and knowledge base it belongs to. If it isn't confident, it asks rather than guessing — it never silently picks the wrong corpus.</p>
+      </div>
+      <div class="card" style="border-color:rgba(229,103,90,.3);">
+        <div class="tag" style="color:var(--red)">Agent 02</div>
+        <h3 style="margin-top:10px;color:var(--red)">The Guardrails Agent</h3>
+        <p style="margin-top:6px;">Checks every draft answer for sensitive data, low confidence, domain mismatches and missing disclaimers before it's allowed anywhere near Jack.</p>
+      </div>
+      <div class="card" style="border-color:rgba(47,183,154,.3);">
+        <div class="tag" style="color:var(--teal)">Agent 03</div>
+        <h3 style="margin-top:10px;color:var(--teal)">The Retrieval Agent</h3>
+        <p style="margin-top:6px;">Searches across every document I've given it — in Pinecone, or locally when it needs to — and pulls back only the passages that are actually relevant to the question.</p>
+      </div>
+      <div class="card" style="border-color:rgba(242,184,75,.3);">
+        <div class="tag">Agent 04</div>
+        <h3 style="margin-top:10px;color:var(--gold)">The Generation Agent</h3>
+        <p style="margin-top:6px;">Writes the answer itself — but only from what the Retrieval Agent handed it, with a citation attached to every claim it makes.</p>
+      </div>
+      <div class="card" style="border-color:rgba(47,183,154,.3);">
+        <div class="tag" style="color:var(--teal)">Agent 05</div>
+        <h3 style="margin-top:10px;color:var(--teal)">The Suggestion Agent</h3>
+        <p style="margin-top:6px;">Looks at what was just asked and proposes the next question worth asking — so Jack keeps moving instead of starting a new search from scratch.</p>
+      </div>
+      <div class="card raised" style="display:flex;flex-direction:column;justify-content:center;">
+        <h3 style="color:var(--cream)">Why I split it this way</h3>
+        <p style="margin-top:6px;">Each agent is small enough to test on its own, and every one of them reports its own metrics, logs and trace — so nothing that happens inside is ever a black box to me.</p>
+      </div>
+    </div>
+    <p class="flow-note reveal">Zero API keys? Every one of these agents still runs — the Retrieval and Generation agents simply fall back to their offline mode.</p>
+  </div>
+</section>
+
+<!-- ===== SLIDE 10 — END-TO-END WORKFLOW ===== -->
+<section class="slide" data-chapter="Ch. 5 · End-to-End">
+  <div class="stage">
+    <div class="kicker-row reveal"><span class="eyebrow">System Architecture · End-to-End Workflow</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">From Jack's question to a cited answer</h2>
+    <div class="reveal" style="margin-top:20px;">
+      <svg viewBox="0 0 1080 300" class="diagram">
+        <defs><marker id="d4" markerWidth="11" markerHeight="11" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="var(--gold)"/></marker><marker id="d4t" markerWidth="11" markerHeight="11" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="var(--teal)"/></marker></defs>
+        <g>
+          <rect x="10" y="40" width="128" height="68" rx="13" fill="var(--teal)" class="flow-node-anim" style="animation-delay:0.0s"/><text x="74" y="70" text-anchor="middle" fill="#08201B" font-size="13.5" font-weight="700">Question</text><text x="74" y="90" text-anchor="middle" fill="#0B3329" font-size="10.5">Jack asks</text>
+          <rect x="166" y="40" width="140" height="68" rx="13" fill="var(--gold)" class="flow-node-anim" style="animation-delay:0.32s"/><text x="236" y="70" text-anchor="middle" fill="#2A1D00" font-size="13.5" font-weight="700">Understand</text><text x="236" y="90" text-anchor="middle" fill="#4A3400" font-size="10.5">read + route</text>
+          <rect x="334" y="40" width="128" height="68" rx="13" fill="var(--ink-2)" stroke="var(--red)" stroke-width="1.3" class="flow-node-anim" style="animation-delay:0.64s"/><text x="398" y="70" text-anchor="middle" fill="var(--red)" font-size="13.5" font-weight="700">Check</text><text x="398" y="90" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5">safety rules</text>
+          <rect x="490" y="40" width="128" height="68" rx="13" fill="var(--ink-3)" stroke="var(--teal)" stroke-width="1.3" class="flow-node-anim" style="animation-delay:0.96s"/><text x="554" y="70" text-anchor="middle" fill="var(--cream)" font-size="13.5" font-weight="700">Retrieve</text><text x="554" y="90" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5">Pinecone RAG</text>
+          <rect x="646" y="40" width="128" height="68" rx="13" fill="var(--ink-3)" stroke="var(--gold)" stroke-width="1.3" class="flow-node-anim" style="animation-delay:1.28s"/><text x="710" y="70" text-anchor="middle" fill="var(--cream)" font-size="13.5" font-weight="700">Generate</text><text x="710" y="90" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5">grounded answer</text>
+          <rect x="802" y="40" width="128" height="68" rx="13" fill="var(--ink-3)" stroke="var(--teal)" stroke-width="1.3" class="flow-node-anim" style="animation-delay:1.6s"/><text x="866" y="70" text-anchor="middle" fill="var(--cream)" font-size="13.5" font-weight="700">Verify</text><text x="866" y="90" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5">RAGAS gate</text>
+          <rect x="958" y="40" width="112" height="68" rx="13" fill="var(--teal)" class="flow-node-anim" style="animation-delay:1.92s"/><text x="1014" y="66" text-anchor="middle" fill="#08201B" font-size="13" font-weight="700">Answer</text><text x="1014" y="86" text-anchor="middle" fill="#0B3329" font-size="10">+ citations</text>
+        </g>
+        <g stroke="var(--gold)" stroke-width="2"><line x1="138" y1="74" x2="164" y2="74" marker-end="url(#d4)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.0s" path="M 138,74 L 164,74"/></circle><line x1="306" y1="74" x2="332" y2="74" marker-end="url(#d4)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.28s" path="M 306,74 L 332,74"/></circle><line x1="462" y1="74" x2="488" y2="74" marker-end="url(#d4)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.56s" path="M 462,74 L 488,74"/></circle><line x1="618" y1="74" x2="644" y2="74" marker-end="url(#d4)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.84s" path="M 618,74 L 644,74"/></circle><line x1="774" y1="74" x2="800" y2="74" marker-end="url(#d4)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="1.12s" path="M 774,74 L 800,74"/></circle><line x1="930" y1="74" x2="956" y2="74" marker-end="url(#d4)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="1.4s" path="M 930,74 L 956,74"/></circle></g>
+        <line x1="236" y1="108" x2="236" y2="172" stroke="var(--gold)" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#d4)"/>
+        <g font-size="12" font-weight="600"><rect x="86" y="176" width="120" height="42" rx="10" fill="var(--teal-dim)" stroke="var(--teal)" stroke-width="1" class="flow-node-anim" style="animation-delay:2.24s"/><text x="146" y="202" text-anchor="middle" fill="var(--teal)">🌾 Agriculture</text><rect x="216" y="176" width="105" height="42" rx="10" fill="var(--gold-dim)" stroke="var(--gold)" stroke-width="1" class="flow-node-anim" style="animation-delay:2.56s"/><text x="268" y="202" text-anchor="middle" fill="var(--gold-soft)">💰 Finance</text><rect x="331" y="176" width="110" height="42" rx="10" fill="var(--red-dim)" stroke="var(--red)" stroke-width="1" class="flow-node-anim" style="animation-delay:2.88s"/><text x="386" y="202" text-anchor="middle" fill="var(--red)">🏥 Healthcare</text><rect x="451" y="176" width="95" height="42" rx="10" fill="var(--ink-2)" stroke="var(--line)" class="flow-node-anim" style="animation-delay:3.2s"/><text x="498" y="202" text-anchor="middle" fill="var(--cream-dim)">＋ any</text></g>
+        <text x="300" y="240" text-anchor="middle" fill="var(--ink-fog)" font-size="11" font-family="IBM Plex Mono">right knowledge · right safety rules · isolated per domain</text>
+        <line x1="710" y1="108" x2="710" y2="172" stroke="var(--teal)" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#d4t)"/>
+        <rect x="560" y="176" width="330" height="58" rx="12" fill="var(--ink-2)" stroke="var(--line)" class="flow-node-anim" style="animation-delay:3.52s"/><text x="725" y="200" text-anchor="middle" fill="var(--cream)" font-size="12.5" font-weight="600">No AI service? Falls back to offline extractive</text><text x="725" y="219" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5">a grounded answer, clearly labelled — never a blank screen</text>
+      </svg>
+    </div>
+    <p class="flow-note reveal">Health &amp; search return in milliseconds; a full written answer comes back in under 5 seconds.</p>
+  </div>
+</section>
+
+<!-- ===== SLIDE 11 — FAILURE SCENARIOS ===== -->
+<section class="slide" data-chapter="Ch. 5 · Failure Scenarios">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow red">System Architecture · Failure Scenarios</span><span class="pill">It never goes dark</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">Every dependency has a backup plan</h2>
+    <p class="lede reveal">The worst case is a clearly-labelled offline answer — never an outage, never a leaked secret, never a silent wrong answer. Each fallback names the tool it drops to.</p>
+    <div class="grid reveal" style="grid-template-columns:1fr 1fr;margin-top:24px;">
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="font-size:16px;">🔌 AI provider down</h3><span class="pill red" style="font-size:10px;">handled</span></div><p style="margin-top:8px;">Fails over <b style="color:var(--cream)">Claude → Groq → offline extractive</b> (grounded, TF-IDF based). Always answers; the mode is labelled.</p></div>
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="font-size:16px;">🗄️ Vector search down</h3><span class="pill red" style="font-size:10px;">handled</span></div><p style="margin-top:8px;">Falls over <b style="color:var(--cream)">Pinecone → faiss → TF-IDF</b> in-process. Retrieval keeps working with no external dependency.</p></div>
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="font-size:16px;">📄 Doc parsing limited</h3><span class="pill red" style="font-size:10px;">handled</span></div><p style="margin-top:8px;">If <b style="color:var(--cream)">Azure Document Intelligence</b> isn't configured, it drops to local extraction (pypdf / docx / pptx). Ingestion never stops.</p></div>
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="font-size:16px;">🧭 Unclear question</h3><span class="pill red" style="font-size:10px;">handled</span></div><p style="margin-top:8px;">Low confidence → offer a domain chip; too weak → <b style="color:var(--cream)">ask Jack</b>. It never guesses from the wrong corpus.</p></div>
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="font-size:16px;">🔒 Sensitive data</h3><span class="pill red" style="font-size:10px;">blocked</span></div><p style="margin-top:8px;">Guardrail detects PII/PHI — email, phone, IDs and more — and <b style="color:var(--cream)">flags it</b> before the answer is trusted.</p></div>
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="font-size:16px;">📉 Weak answer</h3><span class="pill red" style="font-size:10px;">gated</span></div><p style="margin-top:8px;">RAGAS below threshold → <b style="color:var(--cream)">FLAG for review</b>, not APPROVE. In CI it blocks the deploy entirely.</p></div>
+    </div>
+    <p class="flow-note reveal">The load test enforces the failure budget too — breach p95 or error-rate after deploy and the pipeline stops the release.</p>
+  </div>
+</section>
+
+<!-- ===== SLIDE 12 — TECH STACK ===== -->
+<section class="slide" data-chapter="Ch. 6 · Tech Stack">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow">Chapter Six · Tech Stack — why, not the alternatives</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">Every choice earns its place</h2>
+    <div class="reveal" style="margin-top:20px;">
+      <table class="grid-tbl">
+        <thead><tr><th>Layer</th><th>What we chose</th><th>Why this — not the alternative</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Interface</td><td>Streamlit</td><td>A rich, multi-tab agent UI in pure Python — no separate frontend team. <span class="why">vs. React SPA:</span> far less glue for a capstone-scale team.</td></tr>
+          <tr><td class="k">API</td><td>FastAPI</td><td>Typed, async, auto-documented endpoints. <span class="why">vs. Flask:</span> native async + request validation out of the box.</td></tr>
+          <tr><td class="k">AI models</td><td>Claude + Groq</td><td>Best-in-class reasoning (Claude) with a fast, free fallback (Groq), plus offline. <span class="why">vs. a single vendor:</span> no lock-in, and it always answers.</td></tr>
+          <tr><td class="k">Vector search</td><td>Pinecone</td><td>Managed, low-latency vector DB that scales without ops. <span class="why">vs. self-hosted:</span> no index infra to run — with faiss/TF-IDF as local fallbacks.</td></tr>
+          <tr><td class="k">Database</td><td>Neon (Postgres)</td><td>Serverless Postgres for audit, records &amp; users. <span class="why">vs. always-on DB:</span> scales to zero, branches for dev — SQLite covers local.</td></tr>
+          <tr><td class="k">Doc parsing</td><td>Azure Document Intelligence</td><td>Layout-aware text, tables &amp; figures from real PDFs. <span class="why">vs. plain text extraction:</span> keeps structure — with local parsing as fallback.</td></tr>
+          <tr><td class="k">Orchestration</td><td>LangGraph</td><td>An explicit, inspectable state machine with typed state. <span class="why">vs. ad-hoc chains:</span> traceable and testable per step.</td></tr>
+          <tr><td class="k">Observability</td><td>Azure Monitor + App Insights</td><td>Zero-config traces on Azure. <span class="why">vs. standing up Grafana in prod:</span> no extra infra — Prometheus covers local dev.</td></tr>
+          <tr><td class="k">Delivery</td><td>GitHub Actions + ACR</td><td>Gated CI/CD building an image to ACR, deployed to Web App. <span class="why">vs. manual deploy:</span> no broken build ever reaches Azure.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 13 — DESIGN CHOICES ===== -->
+<section class="slide" data-chapter="Ch. 6 · Design Choices">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow">Design Choices · the decisions, justified</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">Written-down decisions, with their trade-offs</h2>
+    <p class="lede reveal">Every notable choice is recorded with the trade-off we accepted — so the design is defensible and reversible.</p>
+    <div class="reveal" style="margin-top:18px;">
+      <table class="grid-tbl">
+        <thead><tr><th>Decision</th><th>What we chose</th><th>Trade-off we accepted</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Packaging</td><td>Single nginx-multiplexed container on Azure Web App</td><td>UI + API scale together; we'd split them only if one needs independent scale.</td></tr>
+          <tr><td class="k">AI backend</td><td>Pluggable providers with an always-on offline fallback</td><td>Offline answers are extractive, not generative — but always clearly labelled via <span class="tag">mode</span>.</td></tr>
+          <tr><td class="k">Routing</td><td>Lightweight, explainable classifier (two thresholds)</td><td>Less nuanced than embeddings — mitigated by confirm-chip &amp; ask-user fallbacks.</td></tr>
+          <tr><td class="k">Retrieval</td><td>Namespace-isolated per domain</td><td>None material — it prevents cross-domain leakage by construction.</td></tr>
+          <tr><td class="k">Delivery</td><td>CI gates deploy; image built &amp; pushed before provisioning</td><td>A slightly longer pipeline — but no broken build reaches Azure and first boot never races a missing image.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="grid reveal" style="grid-template-columns:1fr 1fr 1fr;margin-top:16px;">
+      <div class="card" style="border-color:rgba(242,184,75,.3);padding:14px 16px;"><div class="tag">Key note</div><p style="margin-top:6px;font-size:12.5px;"><b style="color:var(--cream)">WebSockets gotcha:</b> Azure disables WebSockets by default — Streamlit needs them <b style="color:var(--cream)">enabled</b> or the UI loads blank. Documented in the runbook as the #1 post-deploy trap.</p></div>
+      <div class="card" style="border-color:rgba(47,183,154,.3);padding:14px 16px;"><div class="tag" style="color:var(--teal)">Key note</div><p style="margin-top:6px;font-size:12.5px;"><b style="color:var(--cream)">Explainability first:</b> deterministic routing &amp; scoring were chosen over black boxes because regulated domains need <b style="color:var(--cream)">auditable</b> decisions.</p></div>
+      <div class="card" style="padding:14px 16px;"><div class="tag">Key note</div><p style="margin-top:6px;font-size:12.5px;"><b style="color:var(--cream)">Graceful degradation everywhere:</b> every external dependency has a local fallback, so no single outage can take the product down.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 14 — CI/CD ===== -->
+<section class="slide" data-chapter="Ch. 7 · CI/CD">
+  <div class="stage">
+    <div class="kicker-row reveal"><span class="eyebrow">Chapter Seven · CI/CD Implementation</span><span class="pill teal">GitHub Actions · every push</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">Push to <span class="hl">main</span> → live on Azure, safely</h2>
+    <div class="reveal" style="margin-top:24px;">
+      <svg viewBox="0 0 1080 240" class="diagram">
+        <defs><marker id="e5" markerWidth="11" markerHeight="11" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="var(--gold)"/></marker></defs>
+        <g>
+          <rect x="8" y="66" width="150" height="72" rx="13" fill="var(--teal)" class="flow-node-anim" style="animation-delay:0.0s"/><text x="83" y="98" text-anchor="middle" fill="#08201B" font-size="13.5" font-weight="700">Push to main</text><text x="83" y="118" text-anchor="middle" fill="#0B3329" font-size="10.5">GitHub Actions</text>
+          <rect x="182" y="66" width="150" height="72" rx="13" fill="var(--ink-3)" stroke="var(--gold)" stroke-width="1.3" class="flow-node-anim" style="animation-delay:0.32s"/><text x="257" y="94" text-anchor="middle" fill="var(--cream)" font-size="13.5" font-weight="700">Test</text><text x="257" y="113" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5">unit + integration</text><text x="257" y="128" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5">+ coverage</text>
+          <rect x="356" y="66" width="150" height="72" rx="13" fill="var(--ink-3)" stroke="var(--teal)" stroke-width="1.3" class="flow-node-anim" style="animation-delay:0.64s"/><text x="431" y="94" text-anchor="middle" fill="var(--cream)" font-size="13.5" font-weight="700">Evaluate</text><text x="431" y="113" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5">real-doc groundedness</text><text x="431" y="128" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5">+ golden set</text>
+          <rect x="530" y="66" width="150" height="72" rx="13" fill="var(--gold)" class="flow-node-anim" style="animation-delay:0.96s"/><text x="605" y="98" text-anchor="middle" fill="#2A1D00" font-size="13.5" font-weight="700">Build → ACR</text><text x="605" y="118" text-anchor="middle" fill="#4A3400" font-size="10.5">container image</text>
+          <rect x="704" y="66" width="150" height="72" rx="13" fill="var(--ink-3)" stroke="var(--gold)" stroke-width="1.3" class="flow-node-anim" style="animation-delay:1.28s"/><text x="779" y="98" text-anchor="middle" fill="var(--cream)" font-size="13.5" font-weight="700">Deploy</text><text x="779" y="118" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5">Azure Web App</text>
+          <rect x="878" y="66" width="194" height="72" rx="13" fill="var(--teal)" class="flow-node-anim" style="animation-delay:1.6s"/><text x="975" y="98" text-anchor="middle" fill="#08201B" font-size="13.5" font-weight="700">Load test</text><text x="975" y="118" text-anchor="middle" fill="#0B3329" font-size="10.5">Locust · p95 gates</text>
+        </g>
+        <g stroke="var(--gold)" stroke-width="2"><line x1="158" y1="102" x2="180" y2="102" marker-end="url(#e5)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.0s" path="M 158,102 L 180,102"/></circle><line x1="332" y1="102" x2="354" y2="102" marker-end="url(#e5)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.28s" path="M 332,102 L 354,102"/></circle><line x1="506" y1="102" x2="528" y2="102" marker-end="url(#e5)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.56s" path="M 506,102 L 528,102"/></circle><line x1="680" y1="102" x2="702" y2="102" marker-end="url(#e5)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.84s" path="M 680,102 L 702,102"/></circle><line x1="854" y1="102" x2="876" y2="102" marker-end="url(#e5)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="1.12s" path="M 854,102 L 876,102"/></circle></g>
+        <text x="270" y="172" text-anchor="middle" fill="var(--red)" font-size="11.5" font-weight="600">🔒 ships only if quality gates pass</text>
+        <text x="975" y="172" text-anchor="middle" fill="var(--red)" font-size="11.5" font-weight="600">🔒 fails build if p95 / error budget breached</text>
+        <line x1="270" y1="138" x2="270" y2="160" stroke="var(--red)" stroke-width="1.4" stroke-dasharray="3 3"/><line x1="975" y1="138" x2="975" y2="160" stroke="var(--red)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <rect x="300" y="196" width="480" height="38" rx="10" fill="var(--ink-2)" stroke="var(--line)" class="flow-node-anim" style="animation-delay:1.92s"/><text x="540" y="220" text-anchor="middle" fill="var(--ink-soft)" font-size="11.5" font-family="IBM Plex Mono">Infrastructure as Code · Azure Bicep provisions everything, zero-config observability</text>
+      </svg>
+    </div>
+    <p class="flow-note reveal">No manual steps. Poor-quality or slow changes are blocked before they ever reach users.</p>
+  </div>
+</section>
+
+<!-- ===== SLIDE 15 — DEMO ===== -->
+<section class="slide" data-chapter="Ch. 8 · See It Live">
+  <div class="stage">
+    <div class="split narrow-left" style="align-items:center;">
+      <div>
+        <div class="eyebrow teal reveal">Chapter Eight · See it live</div>
+        <h2 class="slide-title reveal" style="margin-top:16px;">Don't take our<br>word for it.</h2>
+        <p class="lede reveal">The full assistant is running on Azure right now — the same build in this deck, with grounding, guardrails, tracing and autoscale all switched on.</p>
+        <ul class="clist reveal" style="margin-top:20px;">
+          <li class="teal">Upload documents and ask a real question</li>
+          <li class="teal">Watch it retrieve, cite, and score the answer live</li>
+          <li class="teal">Build the compliance matrix from an RFP in one click</li>
+        </ul>
+        <p class="reveal" style="margin-top:18px;font-family:'Fraunces';font-style:italic;font-size:15px;color:var(--gold);">Scan the code, or open the link — it's live for the room.</p>
+      </div>
+      <div class="reveal" style="display:flex;justify-content:center;">
+        <div class="card raised" style="text-align:center;padding:30px 34px;border-color:rgba(47,183,154,.35);background:linear-gradient(180deg,var(--teal-dim),transparent);">
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px;"><span style="width:9px;height:9px;border-radius:50%;background:var(--teal);animation:pulseSoft 2s infinite;"></span><span style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);font-weight:700;">Live now</span></div>
+          <div style="width:196px;height:196px;margin:0 auto;border-radius:16px;overflow:hidden;background:var(--paper);padding:10px;"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAYYAAAGGCAIAAADw4rGyAAAIr0lEQVR4nO3cMXIjRxJAUVHBG8jXTXR63WRpr0WTjhxFaKzC7JZq8lfPey6CQKMB/CgjmW9fnx+/ADT8On0BAP+QJCBEkoAQSQJCJAkIkSQgRJKAEEkCQiQJCHlfP/zb73/8mOv4Yf77nz8Xj557v+ded/3MO85d1fqZm/fqxtdtWt8NpyQgRJKAEEkCQiQJCJEkIESSgBBJAkIkCQiRJCDkxfT22rm54R1TM8drN87g7tyNqTn4teYE9s4zP+836JQEhEgSECJJQIgkASGSBIRIEhAiSUCIJAEhkgSEbE1vrzXnd8+Zmu5tbsheOzf5vb6q5p7yc278DTolASGSBIRIEhAiSUCIJAEhkgSESBIQIklAiCQBIQent290btr13N7ucxuyp2a7mzu/+TGckoAQSQJCJAkIkSQgRJKAEEkCQiQJCJEkIESSgBDT29eb2r29Y2q2+9y+cP4tTklAiCQBIZIEhEgSECJJQIgkASGSBIRIEhAiSUDIwentnUnZpnMzx2tTu7fXzk1R7/zt1DOvTU1+3/gbdEoCQiQJCJEkIESSgBBJAkIkCQiRJCBEkoAQSQJCtqa3bSP+1tS8sr/9/r/dMfW6a8/7DTolASGSBIRIEhAiSUCIJAEhkgSESBIQIklAiCQBIS+mt2/c3Xujc1u9z81J77hxtrt5r57HKQkIkSQgRJKAEEkCQiQJCJEkIESSgBBJAkIkCQh5+/r8WDx8457jG2eO13be0dRntHbuE7xxb3fTuW/s+pmdkoAQSQJCJAkIkSQgRJKAEEkCQiQJCJEkIESSgJCt3dvNqeLmLurm/O7Upuodzc93bWp/9rl3dO6b45QEhEgSECJJQIgkASGSBIRIEhAiSUCIJAEhkgSEvJjePmdqU/XUVPGNmtvEd9z4us2N7+e+7U5JQIgkASGSBIRIEhAiSUCIJAEhkgSESBIQIklAyIvp7XObjG+cK53a3Lx2bkP2+h1NfQrn3DiP/rzfoFMSECJJQIgkASGSBIRIEhAiSUCIJAEhkgSESBIQ8vb1+bF4+NzO4HPOzdE2p3vPze9OTSTvuHFqvPkrm/rGOiUBIZIEhEgSECJJQIgkASGSBIRIEhAiSUCIJAEhW9PbzfnsG6/KnPS3pja+Nz+Fqf8ZmPodOSUBIZIEhEgSECJJQIgkASGSBIRIEhAiSUCIJAEhB3dvNzV3Mzdnjs1Jf79z/1HwvHu15pQEhEgSECJJQIgkASGSBIRIEhAiSUCIJAEhkgSEvK8fvnGe9WfbVXxuxnrqdaf+du1nm1bfueade+WUBIRIEhAiSUCIJAEhkgSESBIQIklAiCQBIZIEhLyY3m7Owp575p9tR3Jztnttara7ubV97caZcqckIESSgBBJAkIkCQiRJCBEkoAQSQJCJAkIkSQg5O3r8+P//uOpTdVTW5Cnnrnp3OT3zuuuTV3V1Oc7NZ+9836dkoAQSQJCJAkIkSQgRJKAEEkCQiQJCJEkIESSgJCt3ds7pqaob5waP/cp3Dg1vnOfm9ummxvQp74bTklAiCQBIZIEhEgSECJJQIgkASGSBIRIEhAiSUDI1u7ttRt3JK+dm/xuvu6Nzs0rN7e272jukndKAkIkCQiRJCBEkoAQSQJCJAkIkSQgRJKAEEkCQg5Ob68152jXpnYVP+91n/cJNqfkm7+jNackIESSgBBJAkIkCQiRJCBEkoAQSQJCJAkIkSQgZGt6e2oCe+3c9uW1500GT93JtebMcXMe/dzrnuOUBIRIEhAiSUCIJAEhkgSESBIQIklAiCQBIZIEhLyY3n7ehuwdU7PdN/7tDv8V8P2ak/07nJKAEEkCQiQJCJEkIESSgBBJAkIkCQiRJCBEkoCQ9/XDze28zeneteZV7Zi65uZ0fnNr+9rOd/Lc/2Y4JQEhkgSESBIQIklAiCQBIZIEhEgSECJJQIgkASEvdm+vPW/fsH3S3+/GiXOfb+F115ySgBBJAkIkCQiRJCBEkoAQSQJCJAkIkSQgRJKAkBfT2zfOlU49842m5u/POTdFfe5vz7nx2+6UBIRIEhAiSUCIJAEhkgSESBIQIklAiCQBIZIEhLyvHz63m/ncpOzUFuQbty+v3Tj7u3bjvvCp/2SYmkd3SgJCJAkIkSQgRJKAEEkCQiQJCJEkIESSgBBJAkJe7N4+53mTwedM3asb59Gb92rndaemqE1vA0gSUCJJQIgkASGSBIRIEhAiSUCIJAEhkgSEvJjebu6EXrtxv/KNk9BTs85rN05CP8/OnXRKAkIkCQiRJCBEkoAQSQJCJAkIkSQgRJKAEEkCQsZ2bzed2zbdnHU+Z2o/+tS9unFqvLnD3ikJCJEkIESSgBBJAkIkCQiRJCBEkoAQSQJCJAkIeV8/fOPc8Nq5KeqpWdhze7unNoJP3eep97vW/NaduyqnJCBEkoAQSQJCJAkIkSQgRJKAEEkCQiQJCJEkIOTF9PZac3fvuXnl573ujuas8/NMbeae4pQEhEgSECJJQIgkASGSBIRIEhAiSUCIJAEhkgSEbE1vr52bDf3Z5lnXmlPU565qZ+vz1IT92vO+dTuckoAQSQJCJAkIkSQgRJKAEEkCQiQJCJEkIESSgJCD09s3am4T33HjNvGdCexzs91T72jH1Pd55046JQEhkgSESBIQIklAiCQBIZIEhEgSECJJQIgkASGmt/8H56aZz83v7szRNrd6T5masT43Uz41rb7mlASESBIQIklAiCQBIZIEhEgSECJJQIgkASGSBIQcnN5+3h7rKeemqKfm0c+9o+aG7Btn96c+BackIESSgBBJAkIkCQiRJCBEkoAQSQJCJAkIkSQgZGt6+3nbl5vvaGqOdmqq+JznbSI/tz97x85VOSUBIZIEhEgSECJJQIgkASGSBIRIEhAiSUCIJAEhb1+fH9PXAPA3pyQgRJKAEEkCQiQJCJEkIESSgBBJAkIkCQiRJCDkL7E8rmgw6NseAAAAAElFTkSuQmCC" alt="Scan for live demo" style="width:100%;height:100%;display:block;image-rendering:pixelated;"/></div>
+          <a href="https://proposalforge-app-f7bnfkaxa7dnhmdh.centralindia-01.azurewebsites.net/" target="_blank" rel="noopener" style="display:block;margin-top:18px;font-family:'IBM Plex Mono';font-size:12px;color:var(--teal);text-decoration:none;font-weight:600;word-break:break-all;line-height:1.5;">proposalforge-app…centralindia-01.azurewebsites.net</a>
+          <p style="font-size:11px;color:var(--ink-fog);margin-top:8px;">Hosted on Azure · Central India</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 16 — NUMBERS: LOAD & LATENCY ===== -->
+<section class="slide" data-chapter="Ch. 9 · The Numbers">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow">Chapter Nine · Numbers — Load &amp; Latency</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">Proven under load, enforced in CI</h2>
+    <p class="lede reveal">Performance isn't a claim — it's a gate. Locust drives concurrent users against the live host and the pipeline <b style="color:var(--cream)">fails</b> if any budget is breached.</p>
+    <div class="reveal statrow" style="margin-top:22px;">
+      <div class="stat"><div class="num teal">&lt;50<span style="font-size:.5em">ms</span></div><div class="lbl">/health p95</div><div class="sub">liveness, no work</div></div>
+      <div class="stat"><div class="num teal">&lt;50<span style="font-size:.5em">ms</span></div><div class="lbl">/retrieve p95</div><div class="sub">retrieval, no LLM</div></div>
+      <div class="stat"><div class="num">&lt;5<span style="font-size:.5em">s</span></div><div class="lbl">pipeline p95</div><div class="sub">retrieval + LLM</div></div>
+      <div class="stat"><div class="num">6:4:2</div><div class="lbl">Locust task mix</div><div class="sub">health:retrieve:pipeline</div></div>
+    </div>
+    <div class="split" style="margin-top:22px;align-items:stretch;">
+      <div class="card reveal">
+        <h3 style="color:var(--gold)">The load-test harness</h3>
+        <p style="margin-top:12px;font-size:13.5px;color:var(--cream-dim);line-height:1.7;">I run Locust with a weighted mix — 6× health checks, 4× retrieval-only, 2× the full pipeline — to mirror what real traffic actually looks like. On top of that, RAGAS grades faithfulness, relevance and context-recall on every single run, entirely through the Claude/Groq client I already have — no heavyweight eval package to install. And because the budgets are environment-overridable, I can tune them per environment without touching a line of code.</p>
+      </div>
+      <div class="card raised reveal">
+        <div class="tag">CI output · per-endpoint gate</div>
+        <div class="code" style="margin-top:12px;">
+<span class="c">[threshold]</span> GET /health              p95=<span class="t">  12.4ms</span>  budget=  50ms  <span class="t">OK</span>
+<span class="c">[threshold]</span> POST /api/v1/retrieve    p95=<span class="t">  31.8ms</span>  budget=  50ms  <span class="t">OK</span>
+<span class="c">[threshold]</span> POST /api/v1/pipeline    p95=<span class="g">2841.0ms</span>  budget=5000ms  <span class="t">OK</span>
+<span class="c">──────────────────────────────────</span>
+<span class="t">&#10003; all budgets met — release proceeds</span></div>
+        <p style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;font-style:italic;">A full LLM answer can't be milliseconds — generation takes time. Sub-second budgets cover health &amp; search; the answer is p95 &lt; 5s, reported with throughput.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 17 — QUALITY & OBSERVABILITY ===== -->
+<section class="slide" data-chapter="Ch. 9 · Quality &amp; Observability">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow">Quality &amp; Observability</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">Every answer is measured and visible</h2>
+    <p class="lede reveal">Two layers with different jobs — a per-answer accuracy score for quality, and live traces for diagnosis — so issues are caught and explained fast.</p>
+    <div class="split" style="margin-top:22px;align-items:stretch;">
+      <div class="card reveal">
+        <div class="pill teal" style="font-size:11px;">Scored on every turn</div>
+        <h3 style="margin-top:10px;">📊 The accuracy score</h3>
+        <p style="margin-top:6px;font-size:13.5px;">A single composite, logged with every answer:</p>
+        <div style="margin-top:12px;display:grid;gap:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;background:var(--ink-3);border-radius:9px;padding:9px 13px;"><span style="font-size:13px;color:var(--cream)">Groundedness</span><span class="tag" style="color:var(--teal)">supported by source</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;background:var(--ink-3);border-radius:9px;padding:9px 13px;"><span style="font-size:13px;color:var(--cream)">Usefulness</span><span class="tag" style="color:var(--teal)">substantive answer</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;background:var(--ink-3);border-radius:9px;padding:9px 13px;"><span style="font-size:13px;color:var(--cream)">Confidence</span><span class="tag" style="color:var(--teal)">model / fallback</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;background:var(--gold-dim);border:1px solid rgba(242,184,75,.3);border-radius:9px;padding:9px 13px;"><span style="font-size:13px;color:var(--gold-soft);font-weight:700">accuracy = mean of the three</span></div>
+        </div>
+      </div>
+      <div class="card reveal">
+        <div class="pill" style="font-size:11px;">Zero-config on Azure</div>
+        <h3 style="margin-top:10px;">🔬 Live traces — Azure Monitor</h3>
+        <p style="margin-top:6px;font-size:13.5px;">Per-run trace trees flow to Application Insights automatically.</p>
+        <div style="margin-top:12px;font-family:'IBM Plex Mono';font-size:12px;line-height:1.85;color:var(--cream-dim);">
+          <div style="color:var(--gold)">▸ pipeline run <span style="color:var(--ink-fog)">2.84s</span></div>
+          <div style="padding-left:16px;">├─ route <span style="color:var(--ink-fog)">→ healthcare</span></div>
+          <div style="padding-left:16px;">├─ guardrails <span style="color:var(--teal)">clear</span></div>
+          <div style="padding-left:16px;">├─ retrieve <span style="color:var(--teal)">6 chunks</span></div>
+          <div style="padding-left:16px;">├─ generate <span style="color:var(--ink-fog)">812 tok</span></div>
+          <div style="padding-left:16px;">└─ RAGAS <span style="color:var(--teal)">0.94 ✓</span></div>
+        </div>
+        <p style="font-size:11px;color:var(--ink-fog);margin-top:10px;">Prometheus metrics cover local dev; App Insights covers production.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 18 — REQUEST LOGGING ===== -->
+<section class="slide" data-chapter="Ch. 9 · Request Logging">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow">Request Logging &amp; Audit Trail</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">Every action, recorded for compliance</h2>
+    <p class="lede reveal">A structured audit log captures who did what, when, and with what confidence — <b style="color:var(--cream)">SQLite in local dev, Neon Postgres in production</b> — queryable through the API.</p>
+    <div class="split narrow-right" style="margin-top:22px;align-items:stretch;">
+      <div class="card raised reveal">
+        <div class="tag">Audit log entry</div>
+        <div class="code" style="margin-top:12px;font-size:11.5px;">
+{
+  <span class="g">"timestamp"</span>: <span class="t">"2025-..T09:14:22Z"</span>,
+  <span class="g">"action"</span>: <span class="t">"user_query"</span>,
+  <span class="g">"user_id"</span>: <span class="t">"jack@..."</span>,
+  <span class="g">"session_id"</span>: <span class="t">"a3f9..."</span>,
+  <span class="g">"document_id"</span>: <span class="t">"policy_v4"</span>,
+  <span class="g">"confidence_score"</span>: <span class="g">0.94</span>,
+  <span class="g">"details"</span>: { <span class="g">"domain"</span>: <span class="t">"healthcare"</span> }
+}</div>
+        <p style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;">Written via SQLAlchemy → Neon Postgres in prod (SQLite locally).</p>
+      </div>
+      <div class="reveal">
+        <h3 style="color:var(--gold)">What gets logged</h3>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:9px;margin-top:14px;">
+          <span class="pill ghost" style="justify-content:flex-start;">document_upload</span><span class="pill ghost" style="justify-content:flex-start;">user_query</span>
+          <span class="pill ghost" style="justify-content:flex-start;">document_analysis</span><span class="pill ghost" style="justify-content:flex-start;">guardrail_triggered</span>
+          <span class="pill ghost" style="justify-content:flex-start;">approval_granted</span><span class="pill ghost" style="justify-content:flex-start;">approval_rejected</span>
+          <span class="pill ghost" style="justify-content:flex-start;">report_generated</span><span class="pill ghost" style="justify-content:flex-start;">compliance_matrix</span>
+          <span class="pill ghost" style="justify-content:flex-start;">system_error</span><span class="pill ghost" style="justify-content:flex-start;">config_change</span>
+        </div>
+        <p style="font-size:13.5px;color:var(--cream-dim);margin-top:16px;line-height:1.6;">Exposed via <span class="tag">/api/v1/audit/logs</span> and <span class="tag">/api/v1/audit/stats</span> — a complete, replayable trail, shown in the <b style="color:var(--cream)">Activity</b> tab.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 19 — GUARDRAILS FLOW ===== -->
+<section class="slide" data-chapter="Ch. 10 · Guardrails Flow">
+  <div class="stage">
+    <div class="kicker-row reveal"><span class="eyebrow red">Chapter Ten · Guardrails &amp; Governance — Flow</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">Safety checks, before an answer is trusted</h2>
+    <div class="reveal" style="margin-top:20px;">
+      <svg viewBox="0 0 1080 300" class="diagram">
+        <defs><marker id="f6" markerWidth="11" markerHeight="11" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="var(--gold)"/></marker><marker id="f6r" markerWidth="11" markerHeight="11" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="var(--red)"/></marker><marker id="f6t" markerWidth="11" markerHeight="11" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="var(--teal)"/></marker></defs>
+        <rect x="18" y="120" width="150" height="64" rx="13" fill="var(--ink-3)" stroke="var(--gold)" stroke-width="1.3" class="flow-node-anim" style="animation-delay:0.0s"/><text x="93" y="148" text-anchor="middle" fill="var(--cream)" font-size="13.5" font-weight="700">Draft answer</text><text x="93" y="167" text-anchor="middle" fill="var(--ink-soft)" font-size="11">+ the question</text>
+        <line x1="168" y1="152" x2="205" y2="152" stroke="var(--gold)" stroke-width="2" marker-end="url(#f6)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.0s" path="M 168,152 L 205,152"/></circle>
+        <g font-size="12.5" font-weight="600">
+          <rect x="210" y="18" width="252" height="46" rx="11" fill="var(--red-dim)" stroke="var(--red)" stroke-width="1.1" class="flow-node-anim" style="animation-delay:0.32s"/><text x="228" y="46" fill="var(--red)">🔒 PII / PHI detection</text>
+          <rect x="210" y="74" width="252" height="46" rx="11" fill="var(--gold-dim)" stroke="var(--gold)" stroke-width="1.1" class="flow-node-anim" style="animation-delay:0.64s"/><text x="228" y="102" fill="var(--gold-soft)">📉 Confidence threshold</text>
+          <rect x="210" y="130" width="252" height="46" rx="11" fill="var(--gold-dim)" stroke="var(--gold)" stroke-width="1.1" class="flow-node-anim" style="animation-delay:0.96s"/><text x="228" y="158" fill="var(--gold-soft)">🧭 Domain match</text>
+          <rect x="210" y="186" width="252" height="46" rx="11" fill="var(--red-dim)" stroke="var(--red)" stroke-width="1.1" class="flow-node-anim" style="animation-delay:1.28s"/><text x="228" y="214" fill="var(--red)">⚖️ Policy disclaimer</text>
+          <rect x="210" y="242" width="252" height="46" rx="11" fill="var(--gold-dim)" stroke="var(--gold)" stroke-width="1.1" class="flow-node-anim" style="animation-delay:1.6s"/><text x="228" y="270" fill="var(--gold-soft)">🎯 Query relevance</text>
+        </g>
+        <path d="M462 41 C 530 41 530 152 570 152" fill="none" stroke="var(--ink-fog)" stroke-width="1.4"/><path d="M462 97 C 522 97 522 152 570 152" fill="none" stroke="var(--ink-fog)" stroke-width="1.4"/><line x1="462" y1="153" x2="568" y2="153" stroke="var(--ink-fog)" stroke-width="1.4" marker-end="url(#f6)"/><circle r="4.2" class="flowdot" fill="var(--gold)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.28s" path="M 462,153 L 568,153"/></circle><path d="M462 209 C 522 209 522 152 570 152" fill="none" stroke="var(--ink-fog)" stroke-width="1.4"/><path d="M462 265 C 530 265 530 152 570 152" fill="none" stroke="var(--ink-fog)" stroke-width="1.4"/>
+        <rect x="572" y="124" width="150" height="58" rx="13" fill="var(--ink-2)" stroke="var(--cream)" stroke-width="1.2" class="flow-node-anim" style="animation-delay:1.92s"/><text x="647" y="150" text-anchor="middle" fill="var(--cream)" font-size="13.5" font-weight="700">Any triggered?</text><text x="647" y="168" text-anchor="middle" fill="var(--ink-soft)" font-size="11">severity checked</text>
+        <line x1="722" y1="138" x2="810" y2="80" stroke="var(--teal)" stroke-width="2" marker-end="url(#f6t)"/><circle r="4.2" class="flowdot" fill="var(--teal)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.56s" path="M 722,138 L 810,80"/></circle><line x1="722" y1="168" x2="810" y2="230" stroke="var(--red)" stroke-width="2" marker-end="url(#f6r)"/><circle r="4.2" class="flowdot" fill="var(--red)"><animateMotion dur="1.7s" repeatCount="indefinite" begin="0.84s" path="M 722,168 L 810,230"/></circle>
+        <rect x="815" y="48" width="250" height="62" rx="13" fill="var(--teal-dim)" stroke="var(--teal)" stroke-width="1.3" class="flow-node-anim" style="animation-delay:2.24s"/><text x="835" y="76" fill="var(--teal)" font-size="13.5" font-weight="700">&#10003; Clean → APPROVE</text><text x="835" y="95" fill="var(--ink-soft)" font-size="11">delivered with citations</text>
+        <rect x="815" y="200" width="250" height="62" rx="13" fill="var(--red-dim)" stroke="var(--red)" stroke-width="1.3" class="flow-node-anim" style="animation-delay:2.56s"/><text x="835" y="228" fill="var(--red)" font-size="13.5" font-weight="700">&#9873; Triggered → FLAG</text><text x="835" y="247" fill="var(--ink-soft)" font-size="11">logged to audit; not shown as fact</text>
+      </svg>
+    </div>
+    <p class="flow-note reveal">Applicable checks run on every generated answer — the result is auditable, never silent.</p>
+  </div>
+</section>
+
+<!-- ===== SLIDE 20 — GUARDRAILS & GOVERNANCE ===== -->
+<section class="slide" data-chapter="Ch. 10 · Governance">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow red">Guardrails &amp; Governance — Why &amp; Where</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">The right check, at the right point</h2>
+    <p class="lede reveal">Each guardrail exists because a specific failure would be unacceptable in regulated work. Here's where each fires and why it must.</p>
+    <div class="reveal" style="margin-top:18px;">
+      <table class="grid-tbl">
+        <thead><tr><th>Guardrail</th><th>Fires at</th><th>Why it's needed — the risk it prevents</th></tr></thead>
+        <tbody>
+          <tr><td class="k">PII / PHI detection</td><td>On the generated answer</td><td>A leaked ID, email or health identifier is a <span class="why">compliance breach</span> — caught at error severity before the answer is trusted.</td></tr>
+          <tr><td class="k">Confidence floor</td><td>After composition</td><td>A low-confidence answer shown as fact <span class="why">misleads the user</span>; below the floor it's flagged, not asserted.</td></tr>
+          <tr><td class="k">Domain match</td><td>At routing</td><td>Answering from the wrong corpus is <span class="why">worse than no answer</span> — a mismatch forces a confirm or a re-ask.</td></tr>
+          <tr><td class="k">Policy disclaimer</td><td>On finance / health answers</td><td>This guidance <span class="why">legally needs a disclaimer</span>; a missing one is blocked at error severity.</td></tr>
+          <tr><td class="k">Query relevance</td><td>Question vs. retrieved context</td><td>Low overlap signals <span class="why">weak grounding</span> — it warns before a hallucinated reply reaches the user.</td></tr>
+          <tr><td class="k">RAGAS quality gate</td><td>End of pipeline &amp; in CI</td><td>Ungrounded output must <span class="why">never ship</span> — it FLAGs at runtime and blocks the deploy in CI.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="grid reveal" style="grid-template-columns:1fr 1fr;margin-top:16px;">
+      <div class="card" style="border-color:rgba(47,183,154,.3);padding:14px 16px;"><p style="font-size:13px;"><b style="color:var(--teal)">Governance stance:</b> answers are grounded, sensitive data is protected, each domain enforces its own rules, and <b style="color:var(--cream)">every action is logged</b> — the four properties that make this fit for regulated use.</p></div>
+      <div class="card" style="border-color:rgba(242,184,75,.3);padding:14px 16px;"><p style="font-size:13px;"><b style="color:var(--gold)">Defense in depth:</b> logins use industry-standard password hashing with re-validated sessions; guardrails sit at generation; the audit trail sits underneath — no single layer is the only safeguard.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 21 — CHALLENGES, FIXES & ENHANCEMENTS ===== -->
+<section class="slide" data-chapter="Ch. 11 · Challenges">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow">Chapter Eleven · Challenges, Fixes &amp; Enhancements</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">What we hit, and how we hardened it</h2>
+    <div class="split" style="margin-top:20px;align-items:stretch;">
+      <div class="reveal">
+        <h3 style="color:var(--red);font-size:16px;">Challenges we fixed</h3>
+        <div style="margin-top:12px;display:grid;gap:11px;">
+          <div class="card" style="padding:14px 16px;"><p style="font-size:13px;"><b style="color:var(--cream)">Chat could dead-end.</b> When Claude was unavailable the chat returned "unable to generate." Now it transparently falls back to a <b style="color:var(--cream)">grounded extractive answer</b> — the app always answers, and labels the mode.</p></div>
+          <div class="card" style="padding:14px 16px;"><p style="font-size:13px;"><b style="color:var(--cream)">Analytics were placeholders.</b> Replaced hardcoded charts with <b style="color:var(--cream)">real</b> per-query accuracy, groundedness &amp; confidence trends.</p></div>
+          <div class="card" style="padding:14px 16px;"><p style="font-size:13px;"><b style="color:var(--cream)">Azure WebSockets blank UI.</b> Diagnosed the default-off WebSockets trap; now required &amp; documented so first deploy just works.</p></div>
+        </div>
+      </div>
+      <div class="reveal">
+        <h3 style="color:var(--teal);font-size:16px;">Enhancements shipped &amp; next</h3>
+        <div style="margin-top:12px;display:grid;gap:11px;">
+          <div class="card" style="border-color:rgba(47,183,154,.28);padding:14px 16px;"><p style="font-size:13px;"><b style="color:var(--cream)">Compliance matrix</b> added via Kiro SDD — RFP requirements traced to coverage &amp; gaps, fully tested.</p></div>
+          <div class="card" style="border-color:rgba(47,183,154,.28);padding:14px 16px;"><p style="font-size:13px;"><b style="color:var(--cream)">Accuracy scoring &amp; suggestions</b> — every turn scored; follow-up chips now submit directly.</p></div>
+          <div class="card" style="padding:14px 16px;"><div class="tag">Roadmap to production</div><p style="margin-top:8px;font-size:13px;color:var(--cream-dim);line-height:1.6;">Here's what I'd tackle next: move secrets into Azure Key Vault, wire up auto-alerts on error-rate and latency, and tighten the routing logic based on real usage once we're in pilot.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 22 — CODEBASE & CREDITS ===== -->
+<section class="slide" data-chapter="Ch. 11 · Codebase &amp; Credits">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow">Codebase &amp; Credits</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">A clean, tested, well-documented repo</h2>
+    <div class="reveal statrow" style="margin-top:22px;">
+      <div class="stat"><div class="num">74</div><div class="lbl">Python modules</div></div>
+      <div class="stat"><div class="num teal">48</div><div class="lbl">tests passing</div></div>
+      <div class="stat"><div class="num">7</div><div class="lbl">UI workspaces</div></div>
+      <div class="stat"><div class="num teal">24</div><div class="lbl">API endpoints</div></div>
+    </div>
+    <div class="split narrow-left reveal" style="margin-top:22px;align-items:stretch;">
+      <div class="card raised">
+        <div class="tag">Repository layout</div>
+        <div class="code" style="margin-top:12px;font-size:11.5px;">
+capstone/
+├─ src/
+│  ├─ <span class="g">agents/</span>        <span class="c">Claude · Groq · compliance · gen</span>
+│  ├─ <span class="g">orchestrator/</span>  <span class="c">LangGraph pipeline · router</span>
+│  ├─ <span class="g">retrieval/</span>     <span class="c">Pinecone · RAG · RAGAS</span>
+│  ├─ <span class="g">common/</span>        <span class="c">guardrails · audit · metrics</span>
+│  ├─ <span class="g">api/</span>           <span class="c">FastAPI endpoints</span>
+│  └─ <span class="g">ui/</span>            <span class="c">Streamlit 7-tab agent app</span>
+├─ <span class="t">.kiro/specs/</span>       <span class="c">spec-driven dev artifacts</span>
+├─ infra/            <span class="c">Docker · Bicep · nginx · monitoring</span>
+├─ tests/            <span class="c">unit · integration · load</span>
+└─ docs/             <span class="c">architecture · decisions</span></div>
+      </div>
+      <div class="reveal">
+        <h3 style="color:var(--gold)">Built with</h3>
+        <p style="margin-top:14px;font-size:13.5px;color:var(--cream-dim);line-height:1.75;">I reasoned with <b style="color:var(--cream)">Claude and Groq</b>, retrieved with <b style="color:var(--cream)">Pinecone</b>, and orchestrated every step with <b style="color:var(--cream)">LangGraph</b>. The one feature I built through Kiro's Spec-Driven Development was the compliance matrix. It all runs on <b style="color:var(--cream)">Azure</b>, delivered through <b style="color:var(--cream)">GitHub Actions, ACR and Bicep</b>, with <b style="color:var(--cream)">Neon Postgres</b> (and SQLite locally) holding the data, <b style="color:var(--cream)">Azure Document Intelligence</b> reading the documents, and <b style="color:var(--cream)">Azure Monitor, App Insights and Prometheus</b> keeping watch on all of it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 23 — CONCLUSION ===== -->
+<section class="slide" data-chapter="Ch. 12 · Conclusion">
+  <div class="stage">
+    <div class="split narrow-right" style="align-items:center;">
+      <div>
+        <div class="eyebrow teal reveal">Chapter Twelve · Conclusion</div>
+        <h2 class="slide-title reveal" style="margin-top:16px;font-size:clamp(28px,4vw,52px);">Same question.<br>A very different<br><span class="hl-t">morning.</span></h2>
+        <div class="ba reveal" style="margin-top:26px;">
+          <div class="ba-col before" style="padding:18px;">
+            <h4>Before · 47 min</h4>
+            <p style="font-size:14px;color:var(--cream-dim);line-height:1.7;">Twelve tabs open and still no answer he could point to — nothing to trust, so he read the whole thing by hand anyway.</p>
+          </div>
+          <div class="ba-col after" style="padding:18px;">
+            <h4>After · under 3s</h4>
+            <p style="font-size:14px;color:var(--cream-dim);line-height:1.7;">One question, one cited answer, and Jack is back to the work that actually needed him.</p>
+          </div>
+        </div>
+        <p class="lede reveal" style="margin-top:22px;">Live on Azure, tested end to end, and built to read any document in any domain. <b style="color:var(--cream)">I think it's ready — I'm asking for your go-ahead to take it further.</b></p>
+      </div>
+      <div class="reveal" style="display:flex;justify-content:center;">
+        <svg viewBox="0 0 300 340" class="diagram" style="max-width:270px">
+          <text class="f-slow" x="30" y="50" font-size="24" fill="var(--gold)">&#10022;</text><text class="f-med" x="252" y="72" font-size="19" fill="var(--teal)">&#10022;</text><text class="f-slow" x="258" y="214" font-size="21" fill="var(--gold-soft)" style="animation-delay:.5s">&#10022;</text><text class="f-med" x="20" y="220" font-size="16" fill="var(--teal)" style="animation-delay:.3s">&#10022;</text>
+          <g class="jack-excited" transform="translate(150,180)">
+            <!-- raised arms, energetic -->
+            <path d="M-52 10 Q-92 -30 -78 -68" fill="none" stroke="var(--ink-4)" stroke-width="14" stroke-linecap="round"/>
+            <path d="M52 10 Q92 -30 78 -68" fill="none" stroke="var(--ink-4)" stroke-width="14" stroke-linecap="round"/>
+            <circle cx="-78" cy="-68" r="9" fill="var(--cream)"/><circle cx="78" cy="-68" r="9" fill="var(--cream)"/>
+            <circle cx="0" cy="0" r="78" fill="var(--ink-3)" stroke="var(--teal)" stroke-width="2.5"/>
+            <path d="M-56 -24 Q-50 -70 0 -72 Q52 -70 56 -24 Q40 -54 0 -54 Q-38 -54 -56 -24Z" fill="var(--ink-4)"/>
+            <circle cx="-24" cy="-10" r="7" fill="var(--cream)"/><circle cx="24" cy="-10" r="7" fill="var(--cream)"/>
+            <path d="M-34 20 Q0 62 34 20 Q0 46 -34 20Z" fill="var(--ink)" stroke="var(--teal)" stroke-width="3.5" stroke-linejoin="round"/>
+          </g>
+          <text x="150" y="308" text-anchor="middle" font-size="12.5" fill="var(--teal)" font-family="IBM Plex Mono" letter-spacing="2">JACK · SORTED</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 24 — VALUE-BASED LEARNINGS ===== -->
+<section class="slide" data-chapter="Ch. 12 · Learnings">
+  <div class="stage scroll">
+    <div class="kicker-row reveal"><span class="eyebrow">Value-Based Learnings</span></div>
+    <h2 class="slide-title reveal" style="font-size:clamp(24px,3.2vw,40px);">What building this taught us</h2>
+    <div class="grid reveal" style="grid-template-columns:1fr 1fr 1fr;margin-top:22px;">
+      <div class="card"><div style="font-family:'Fraunces';font-style:italic;font-size:19px;color:var(--gold);">Grounding beats fluency</div><p style="margin-top:8px;">In regulated work, a cited answer you can check beats an eloquent one you can't. Trust is the product.</p></div>
+      <div class="card"><div style="font-family:'Fraunces';font-style:italic;font-size:19px;color:var(--teal);">Degrade, never fail</div><p style="margin-top:8px;">Giving every dependency a fallback turned reliability from a hope into a guarantee.</p></div>
+      <div class="card"><div style="font-family:'Fraunces';font-style:italic;font-size:19px;color:var(--gold);">Specs make speed</div><p style="margin-top:8px;">Kiro's requirements → design → tasks felt slower up front and was faster overall — it kills rework.</p></div>
+      <div class="card"><div style="font-family:'Fraunces';font-style:italic;font-size:19px;color:var(--teal);">Quality is a gate</div><p style="margin-top:8px;">Putting RAGAS &amp; latency budgets in CI meant quality could never quietly regress.</p></div>
+      <div class="card"><div style="font-family:'Fraunces';font-style:italic;font-size:19px;color:var(--gold);">Neutrality is leverage</div><p style="margin-top:8px;">Vendor-independence isn't just principled — it removes the biggest blocker to adoption.</p></div>
+      <div class="card"><div style="font-family:'Fraunces';font-style:italic;font-size:19px;color:var(--teal);">Observability pays back</div><p style="margin-top:8px;">Per-run traces turned "why is this slow or wrong?" from an investigation into a glance.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 25 — Q&A + THANK YOU ===== -->
+<section class="slide" data-chapter="Thank You">
+  <div class="stage">
+    <div style="text-align:center;width:100%;max-width:860px;margin:0 auto;">
+      <svg class="reveal f-slow" viewBox="0 0 40 40" width="48" height="48" style="margin-bottom:18px;">
+        <rect x="3" y="3" width="34" height="34" rx="9" fill="var(--ink-3)" stroke="var(--gold)" stroke-width="1.5"/>
+        <path d="M13 27V13h7a4.5 4.5 0 0 1 0 9h-7" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="27" cy="27" r="2.4" fill="var(--teal)"/>
+      </svg>
+      <h2 class="reveal" style="font-size:clamp(56px,10vw,130px);">Thank <span class="hl">You</span></h2>
+
+      <p class="reveal" style="margin-top:30px;font-size:14px;color:var(--cream-dim);line-height:1.6;max-width:520px;margin-left:auto;margin-right:auto;">
+        A special thanks to our trainer <b style="color:var(--gold-soft)">Rajat</b> — for <b style="color:var(--cream)">30 days</b> of training and for guiding our team through this capstone project.
+      </p>
+      <p class="reveal" style="margin-top:10px;font-size:12.5px;color:var(--ink-soft);">
+        This app was developed by <b style="color:var(--cream)">Simha</b> &amp; <b style="color:var(--cream)">Indhumathi</b>.
+      </p>
+
+      <div class="reveal" style="margin-top:26px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+        <span class="pill">Live on Azure</span><span class="pill teal">48 tests · 100% eval</span><span class="pill ghost">Multi-domain</span>
+      </div>
+      <a href="https://proposalforge-app-f7bnfkaxa7dnhmdh.centralindia-01.azurewebsites.net/" target="_blank" rel="noopener" class="reveal" style="display:inline-block;margin-top:16px;font-family:'IBM Plex Mono';font-size:12px;color:var(--teal);text-decoration:none;word-break:break-all;">▸ proposalforge-app…centralindia-01.azurewebsites.net</a>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<div id="dots"></div>
+<div id="nav">
+  <span id="progress-txt" class="tnum">01 / 25</span>
+  <button class="nav-btn" id="prevBtn" aria-label="Previous slide"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+  <button class="nav-btn" id="nextBtn" aria-label="Next slide"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+</div>
+
+<script>
+(function(){
+  const deck=document.getElementById('deck');
+  const slides=Array.from(deck.querySelectorAll('.slide'));
+  const total=slides.length;
+  let cur=0;
+  const dotsWrap=document.getElementById('dots');
+  slides.forEach((s,i)=>{const d=document.createElement('div');d.className='dot';d.title=(s.dataset.chapter||('Slide '+(i+1)));d.addEventListener('click',()=>go(i));dotsWrap.appendChild(d);});
+  const dots=Array.from(dotsWrap.children);
+  const snum=document.getElementById('snum'), railfill=document.getElementById('railfill'),
+        moodDot=document.getElementById('moodDot'), chaptitle=document.getElementById('chaptitle'),
+        prog=document.getElementById('progress-txt'), topfill=document.getElementById('topbar-fill'),
+        prevBtn=document.getElementById('prevBtn'), nextBtn=document.getElementById('nextBtn');
+  const pad=n=>String(n).padStart(2,'0');
+  function render(){
+    slides.forEach((s,i)=>{s.classList.toggle('active',i===cur);s.classList.toggle('prev',i<cur);});
+    dots.forEach((d,i)=>d.classList.toggle('on',i===cur));
+    const frac=total>1?cur/(total-1):0;
+    snum.textContent=pad(cur+1);
+    prog.textContent=pad(cur+1)+' / '+pad(total);
+    railfill.style.height=(frac*100)+'%';
+    moodDot.style.top=(frac*100)+'%';
+    topfill.style.width=((cur+1)/total*100)+'%';
+    chaptitle.textContent=slides[cur].dataset.chapter||'';
+    prevBtn.disabled=cur===0; nextBtn.disabled=cur===total-1;
+  }
+  function go(i){cur=Math.max(0,Math.min(total-1,i));render();}
+  function next(){go(cur+1);} function prev(){go(cur-1);}
+  nextBtn.addEventListener('click',next); prevBtn.addEventListener('click',prev);
+  document.addEventListener('keydown',e=>{
+    if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+    else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+    else if(e.key==='Home'){go(0);} else if(e.key==='End'){go(total-1);}
+  });
+  let wl=false;
+  deck.addEventListener('wheel',e=>{
+    const st=slides[cur].querySelector('.stage.scroll');
+    if(st){const atTop=st.scrollTop<=2,atBot=st.scrollTop+st.clientHeight>=st.scrollHeight-2;
+      if((e.deltaY>0&&!atBot)||(e.deltaY<0&&!atTop))return;}
+    if(wl)return; wl=true; setTimeout(()=>wl=false,650);
+    if(Math.abs(e.deltaY)<12)return; e.deltaY>0?next():prev();
+  },{passive:true});
+  let tx=0;
+  deck.addEventListener('touchstart',e=>tx=e.touches[0].clientX,{passive:true});
+  deck.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tx; if(Math.abs(dx)>60){dx<0?next():prev();}},{passive:true});
+  render();
+})();
+</script>
+</body>
+</html>
