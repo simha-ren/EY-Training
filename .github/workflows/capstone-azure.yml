@@ -1,4 +1,4 @@
-name:  CI/CD - Azure
+name:  Capstone-Azure
 
 on:
   push:
