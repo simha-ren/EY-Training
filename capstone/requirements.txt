@@ -93,3 +93,5 @@ pyodbc>=5.1                          # Azure SQL tracking DB in production (need
 #   pip install ragas langchain-anthropic langchain-huggingface
 # and set CLAUDE_API_KEY (or OPENAI_API_KEY); ragas_llm.py auto-detects and uses it,
 # otherwise it falls back to LLM-graded-via-client, then to a heuristic.
+matplotlib>=3.7
+httpx>=0.24,<0.28        # required by FastAPI/Starlette TestClient (tests/test_rate_limiter.py)
