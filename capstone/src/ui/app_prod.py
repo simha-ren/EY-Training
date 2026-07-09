@@ -131,9 +131,21 @@ def rebuild_index():
         st.session_state.retriever = r
         st.session_state.retriever_backend = getattr(r, "backend", "none")
     except Exception as e:
-        st.session_state.retriever = None
-        st.session_state.retriever_backend = "none"
-        st.warning(f"Vector index unavailable ({e}); using plain-text context.")
+        # Vector backend failed (e.g. index dimension mismatch). Don't drop to
+        # dead plain-text — fall back to TF-IDF, which always works and still
+        # gives real retrieval with scores (so source attribution + off-topic
+        # detection keep working).
+        try:
+            from src.retrieval.retriever import TfidfRetriever
+            r = TfidfRetriever().build_documents(docs)
+            st.session_state.retriever = r
+            st.session_state.retriever_backend = "tfidf"
+            st.info(f"Vector index unavailable ({e}). Falling back to TF-IDF "
+                    f"keyword retrieval — search still works.")
+        except Exception as e2:
+            st.session_state.retriever = None
+            st.session_state.retriever_backend = "none"
+            st.warning(f"Retrieval unavailable ({e2}); using plain-text context.")
 
 def audit(action: str, detail: str = ""):
     entry = {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -277,12 +289,14 @@ def feed_engine_docs():
 
 
 def followups(last_q: str, last_a: str):
-    try:
-        raw = client.get_auto_suggestions((last_a or "")[:1500], last_q or "")
-        out = [s for s in raw if not guard.check_pii(s).triggered]
-        return out[:3]
-    except Exception:
-        return []
+    """Fast, always-relevant follow-up chips. Heuristic-first (instant) so they
+    never disappear; enriched by the LLM only when online."""
+    ss = st.session_state
+    last_off = next((m.get("offtopic", False) for m in reversed(ss.history)
+                     if m["role"] == "assistant"), False)
+    return pfx.followups_fast(client, last_q, last_a, ss.documents,
+                              guard=guard, offtopic=bool(last_off),
+                              use_llm=False)
 
 def _grounded(answer: str, context: str) -> float:
     a = set(re.findall(r"[a-z]{4,}", (answer or "").lower()))
@@ -400,6 +414,33 @@ def answer_query(q: str):
         except Exception as e:
             ss.history.append({"role": "assistant",
                 "content": f"I couldn't build the report ({e}). Please try again."})
+        return
+
+    # ---- summarise ALL documents on request (named + structured) ----
+    if ss.documents and re.search(r"summar", q, re.I):
+        parts = [f"Here's a summary of your {len(ss.documents)} uploaded "
+                 f"document(s):"]
+        for d in ss.documents:
+            an = d.get("analysis", {})
+            obj = pfx.bulletize(an.get("Objective", ""), 1)
+            ch = pfx.bulletize(an.get("Current solutions", ""), 3)
+            so = pfx.bulletize(an.get("Proposed solutions", ""), 3)
+            ins = pfx.bulletize(an.get("Insights", ""), 2)
+            seg = [f"**📄 {d['name']}** · _{d.get('domain','General')}_"]
+            if obj:
+                seg.append(f"- **Objective:** {obj[0]}")
+            if ch:
+                seg.append("- **Current challenges:** " + "; ".join(ch))
+            if so:
+                seg.append("- **Proposed solutions:** " + "; ".join(so))
+            if ins:
+                seg.append("- **Insights:** " + "; ".join(ins))
+            parts.append("\n".join(seg))
+        ans = "\n\n".join(parts)
+        ss.history.append({"role": "assistant", "content": ans, "confidence": 0.92,
+                           "sources": [d["name"] for d in ss.documents],
+                           "domain": "General", "grounded": 1.0})
+        audit("QUERY", "summarize all documents")
         return
 
     # ---- retrieve grounded context ----
@@ -566,26 +607,28 @@ with tab_over:
                             f"`{st.session_state.retriever_backend}`")
                 # Highlighted analysis of the most recently added document.
                 latest = docs[-1]
+                _SEC_LABEL = {"Objective": "🎯 Objective",
+                              "Current solutions": "⚠️ Current challenges",
+                              "Proposed solutions": "✅ Proposed solutions",
+                              "Insights": "💡 Insights"}
                 with st.container(border=True):
                     st.markdown(f"##### 📋 Analysis · {latest['name']}")
                     an = latest.get("analysis", {})
-                    for sec in ("Objective", "Current solutions",
-                                "Proposed solutions", "Insights"):
-                        val = (an.get(sec) or "").strip()
-                        st.markdown(f"**{sec}**")
-                        if val:
-                            for ln in val.splitlines():
-                                st.markdown(f"- {ln}" if not ln.startswith("-") else ln)
+                    for sec, label in _SEC_LABEL.items():
+                        pts = pfx.bulletize(an.get(sec, ""))
+                        st.markdown(f"**{label}**")
+                        if pts:
+                            st.markdown("\n".join(f"- {p}" for p in pts))
                         else:
                             st.caption("—")
                 for i, d in enumerate(docs):
                     with st.expander(f"📄 {d['name']}  ·  {d['domain']}  ·  {d['chars']} chars"):
                         an = d.get("analysis", {})
-                        for sec in ("Objective", "Current solutions",
-                                    "Proposed solutions", "Insights"):
-                            v = (an.get(sec) or "").strip()
-                            if v:
-                                st.markdown(f"**{sec}:** {v}")
+                        for sec, label in _SEC_LABEL.items():
+                            pts = pfx.bulletize(an.get(sec, ""))
+                            if pts:
+                                st.markdown(f"**{label}**")
+                                st.markdown("\n".join(f"- {p}" for p in pts))
                         vis = d.get("visuals", {})
                         if vis.get("descriptions"):
                             st.markdown("**Diagrams / visuals:**")
@@ -635,21 +678,26 @@ with tab_over:
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     use_container_width=True)
 
-            # follow-ups based on the PREVIOUS question
+            # auto-suggestions: contextual after a question, defaults after upload
             last_q = next((m["content"] for m in reversed(st.session_state.history)
                            if m["role"] == "user"), "")
             last_a = next((m["content"] for m in reversed(st.session_state.history)
                            if m["role"] == "assistant"), "")
             if last_q:
                 fups = followups(last_q, last_a)
-                if fups:
-                    st.markdown("**💡 Follow-up questions**")
-                    fcols = st.columns(len(fups))
-                    for i, f in enumerate(fups):
-                        if fcols[i].button(f"❓ {f[:48]}", key=f"f_{len(st.session_state.history)}_{i}"):
-                            with st.spinner("🤖 Thinking…"):
-                                answer_query(f)
-                            st.rerun()
+            elif st.session_state.documents:
+                fups = pfx.smart_followups("", "", st.session_state.documents)
+            else:
+                fups = []
+            if fups:
+                st.markdown("**💡 You might want to ask**")
+                for i, f in enumerate(fups):
+                    if st.button(f"💬 {f}",
+                                 key=f"f_{len(st.session_state.history)}_{i}",
+                                 use_container_width=True):
+                        with st.spinner("🤖 Thinking…"):
+                            answer_query(f)
+                        st.rerun()
 
             q = st.chat_input("Ask a question or describe what you need")
             if q:
@@ -840,15 +888,30 @@ with tab_compliance:
                "Built via Kiro SDD (.kiro/specs/compliance-matrix/).")
 
     docs = st.session_state.documents
-    prefill_rfp = docs[0]["text"][:4000] if docs else ""
-    prefill_resp = docs[-1]["text"][:4000] if len(docs) > 1 else ""
+    names = [d["name"] for d in docs]
     cc1, cc2 = st.columns(2)
-    rfp_text = cc1.text_area("RFP / requirements source", value=prefill_rfp,
-                             height=220, placeholder="Paste the RFP text (shall/must/…)")
-    resp_text = cc2.text_area("Our proposal response", value=prefill_resp,
-                              height=220, placeholder="Paste our proposal response")
-    if docs:
-        st.caption("Tip: pre-filled from your uploaded Knowledge — edit as needed.")
+    if names:
+        rfp_pick = cc1.selectbox("RFP / requirements document", names, index=0,
+                                 key="cmp_rfp")
+        resp_pick = cc2.selectbox("Our proposal response document", names,
+                                  index=len(names) - 1, key="cmp_resp")
+        rfp_src = next((d["text"] for d in docs if d["name"] == rfp_pick), "")
+        resp_src = next((d["text"] for d in docs if d["name"] == resp_pick), "")
+        if rfp_pick == resp_pick and len(names) > 1:
+            st.info("Pick two different documents — one as the RFP, one as the "
+                    "response — for a meaningful traceability matrix.")
+        rfp_text = cc1.text_area("RFP text (editable)", value=rfp_src[:4000],
+                                 height=200, key=f"rfp_{rfp_pick}")
+        resp_text = cc2.text_area("Response text (editable)", value=resp_src[:4000],
+                                  height=200, key=f"resp_{resp_pick}")
+        st.caption("Pre-filled from the selected documents — edit as needed.")
+    else:
+        rfp_text = cc1.text_area("RFP / requirements source", value="", height=220,
+                                 placeholder="Paste the RFP text (shall/must/…)")
+        resp_text = cc2.text_area("Our proposal response", value="", height=220,
+                                  placeholder="Paste our proposal response")
+        st.info("Upload documents in the Overview tab to pick from them, or paste "
+                "text here.")
 
     if st.button("📋 Build traceability matrix"):
         if not rfp_text.strip():
@@ -1001,29 +1064,6 @@ with tab_tests:
         d.metric("Coverage", f"{tr.get('coverage',{}).get('total_percent','?')}%")
     elif tr:
         st.error(tr.get("error", "Test run failed"))
-
-    st.divider()
-    st.markdown("#### 🚀 Load test (end-to-end)")
-    st.caption("Phased per-endpoint latency & sustained RPS vs budgets "
-               "(health <50ms, retrieve <150ms, end-to-end p95 <5s).")
-    lc1, lc2, lc3 = st.columns(3)
-    base = lc1.text_input("Target API base URL",
-                          value=os.getenv("SELF_API_BASE", "http://127.0.0.1:8001"))
-    users = lc2.slider("Concurrent users", 1, 50, 10)
-    dur = lc3.slider("Duration (s)", 3, 60, 8)
-    if st.button("▶️ Run load test"):
-        with st.spinner(f"Load testing {base}…"):
-            st.session_state._load = run_load_test(base, users, dur)
-    lr = st.session_state.get("_load")
-    if lr and lr.get("ok"):
-        agg = lr["aggregate"]
-        a, b, c = st.columns(3)
-        a.metric("🔥 Peak RPS", agg["peak_rps"]); b.metric("Requests", agg["total_requests"])
-        c.metric("Result", "PASS ✅" if agg["all_pass"] else "FAIL ❌")
-        st.dataframe([{"Endpoint": r["endpoint"], "RPS": r["rps"], "p50 (ms)": r["p50_ms"],
-                       "p95 (ms)": r["p95_ms"], "Budget (ms)": r["budget_ms"],
-                       "Status": r["status"]} for r in lr["endpoints"]],
-                     use_container_width=True, hide_index=True)
 
 st.markdown("<hr><p style='text-align:center;color:#5C6B82'>"
             "<b>ProposalForge Agent</b> · LangGraph agentic RAG · Claude/Groq · Pinecone · "
