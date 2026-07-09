@@ -23,6 +23,7 @@ from src.agents.llm_backend import get_llm_client
 from src.retrieval.retriever import get_retriever
 from src.common.file_processor import FileProcessor
 from src.common import doc_analysis, guardrails as gr
+from src.ui import pf_upgrades as pfx
 from src.agents.compliance_matrix import build_matrix
 from src.common.load_tester import run_load_test
 from src.common.tracking_store import TrackingStore
@@ -349,6 +350,7 @@ def build_solutions_report():
         "This report reviews the uploaded proposal documents, summarises the problems "
         "they raise, and recommends concrete proposed solutions and insights to address "
         "them.")
+    pfx.add_report_chart(d, docs)      # UPGRADE: embed a portfolio chart / visualization
     for i, doc in enumerate(docs, 1):
         d.add_heading(f"{i}. {doc['name']}  ({doc.get('domain','General')})", level=1)
         sec = _llm_solutions_for(doc)
@@ -481,6 +483,27 @@ def answer_query(q: str):
                        "domain": classify_domain(q + " " + ans),
                        "grounded": _grounded(ans, context)})
 
+    # ---- UPGRADE: off-topic heads-up banner (only when docs are loaded) ----
+    banner = pfx.offtopic_banner(q, context, ss.documents, retrieved)
+    if banner:
+        ss.history[-1]["content"] = banner + "\n\n" + ss.history[-1]["content"]
+        ss.history[-1]["offtopic"] = True
+        audit("OFFTOPIC_FLAG", q)
+
+    # ---- UPGRADE: render a chart in the chat when the user asks to see data ----
+    if pfx.chart_intent(q):
+        try:
+            spec = pfx.build_chart(q, context, client, online)
+        except Exception:
+            spec = None
+        if spec:
+            ss.history[-1]["chart"] = spec
+            audit("CHART_RENDER", spec.get("title", "chart"))
+        else:
+            ss.history[-1]["content"] += (
+                "\n\n_(I couldn't find chartable numbers in your documents for this "
+                "request — upload a doc with a data table or time series to see a chart.)_")
+
 # ------------------------------- centered title ---------------------------- #
 st.markdown(
     '<div class="pf-hero"><h1>🤖 ProposalForge Agent</h1>'
@@ -590,6 +613,8 @@ with tab_over:
             for m in st.session_state.history:
                 with st.chat_message(m["role"]):
                     st.write(m["content"])
+                    if m.get("chart"):
+                        pfx.render_chart(st, m["chart"])
                     if m["role"] == "assistant" and not m.get("blocked"):
                         meta = []
                         if m.get("domain") and m["domain"] != "General":
