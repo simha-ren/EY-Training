@@ -1,4 +1,4 @@
-name:  Capstone-Azure
+name: CI/CD - Azure
 
 on:
   push:
@@ -12,6 +12,9 @@ jobs:
   # 1) Unit + integration tests (must pass before build)
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: capstone
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,6 +34,9 @@ jobs:
   # 1b) End-to-end evaluation against a real document (offline; gates deploy)
   eval:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: capstone
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -80,6 +86,9 @@ jobs:
     needs: build-deploy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: capstone
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
