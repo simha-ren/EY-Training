@@ -227,9 +227,17 @@ def ingest_files(files, scan_visuals: bool):
                 da = doc_analysis.analyze_document(raw, uf.name, include_visuals=True)
                 visuals = da.get("visuals", visuals)
                 if not text:
-                    text = da.get("text") or "\n\n".join(
-                        f"[Figure p{d['page']}] {d['description']}"
-                        for d in visuals.get("descriptions", []))
+                    text = da.get("text") or ""
+                # ALWAYS fold diagram/figure descriptions into the searchable text
+                # so questions about architecture diagrams / charts retrieve and
+                # answer from them (not just images).
+                desc = visuals.get("descriptions") or []
+                if desc:
+                    diagram_text = "\n\n".join(
+                        f"[Diagram/Figure p{d.get('page','?')}] {d.get('description','')}"
+                        for d in desc if d.get("description"))
+                    if diagram_text:
+                        text = (text + "\n\n" + diagram_text).strip()
             dom = classify_domain(text or uf.name)
             st.session_state.documents.append({
                 "id": uuid.uuid4().hex, "name": uf.name, "text": text or "",
@@ -385,14 +393,26 @@ def build_solutions_report():
 
 def answer_query(q: str):
     ss = st.session_state
-    gin = guard.check_pii(q)
     ss.history.append({"role": "user", "content": q})
     audit("QUERY", q)
-    if gin.triggered:
+
+    # ---- prompt-injection / jailbreak guardrail (most severe, checked first) --
+    inj = pfx.injection_hit(q)
+    if inj:
         ss.guardrail_hits += 1
-        audit("GUARDRAIL_BLOCK", f"input · {gin.message}")
+        audit("GUARDRAIL_BLOCK", "prompt injection / jailbreak attempt")
         ss.history.append({"role": "assistant", "blocked": True,
-            "content": f"🛡️ **Guardrail — PII/PHI protection.** {gin.message}. "
+            "content": f"🛑 **Jailbreak / prompt-injection blocked.** {inj} "
+                       "I can only help with questions about your uploaded documents."})
+        return
+
+    sens = pfx.pii_phi_request(q)
+    if sens:
+        cat, msg = sens
+        ss.guardrail_hits += 1
+        audit("GUARDRAIL_BLOCK", f"input · {cat} request")
+        ss.history.append({"role": "assistant", "blocked": True,
+            "content": f"🛡️ **Guardrail — {cat} protection.** {msg} "
                        "I can discuss the documents in general terms but won't reveal "
                        "personal or health identifiers."})
         return
