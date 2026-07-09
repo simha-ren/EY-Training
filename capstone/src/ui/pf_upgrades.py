@@ -13,6 +13,7 @@ Design goals:
 """
 from __future__ import annotations
 
+import os
 import re
 import json
 from typing import Optional, List, Dict
@@ -132,20 +133,42 @@ def relevance(query: str, context: str) -> float:
     return len(q & c) / len(q)
 
 
-def offtopic_banner(query: str, context: str, docs: list, retrieved: list,
-                    domains: Optional[List[str]] = None) -> Optional[str]:
-    """Return a heads-up banner when a question looks outside the uploaded knowledge.
+# Questions ABOUT the documents (summaries, problems, solutions, insights, etc.)
+# are never off-topic when documents are loaded — even though they share no
+# content words with the corpus (e.g. "summarise this doc" scores 0 in TF-IDF).
+_DOC_META = re.compile(
+    r"\b(summar|overview|objective|goal|challenge|problem|issue|risk|gap|"
+    r"solution|propos|recommend|insight|takeaway|finding|highlight|key point|"
+    r"main point|current situation|address|improve|mitigat|fix|analy|explain|describe|"
+    r"what does|what is in|whats in|what's in|tell me about|about (this|these|the) "
+    r"(doc|document|file|report|proposal)|across (all )?(doc|domain)|compare|"
+    r"table|figure|chart|graph|diagram|budget|kpi|metric|timeline)", re.I)
 
-    Fires only when documents ARE loaded and there is essentially no grounding.
-    We still answer afterwards (general knowledge), but the banner tells the user
-    the answer is not from their documents — satisfying 'hey, it's not related'.
+# TF-IDF cosine below this means the query shares no meaningful terms with ANY
+# document — i.e. genuinely off-topic. Off-topic queries score ~0.0; real
+# content queries score >0.1 (env-tunable).
+_OFFTOPIC_MIN_SCORE = float(os.getenv("OFFTOPIC_MIN_SCORE", "0.03"))
+
+
+def offtopic_banner(query, context, docs, retrieved, domains=None):
+    """Return a heads-up banner ONLY when a question is genuinely unrelated to the
+    uploaded documents. Conservative by design — document questions (including
+    'summarise this', 'what are the challenges', 'proposed solutions') are never
+    flagged. Fires for things like 'what is the capital of India' when docs exist.
     """
     if not docs:
-        return None                      # no knowledge yet — nothing to be off-topic from
-    score = relevance(query, context)
-    grounded = bool(retrieved) and score >= 0.15
-    if grounded:
-        return None
+        return None                                   # nothing to be off-topic from
+    if _DOC_META.search(query or ""):
+        return None                                   # it's a question about the docs
+    # Use the retriever's own top similarity score as the signal.
+    top = 0.0
+    for h in (retrieved or []):
+        try:
+            top = max(top, float(h.get("score", 0.0)))
+        except (TypeError, ValueError):
+            pass
+    if top >= _OFFTOPIC_MIN_SCORE:
+        return None                                   # matches the corpus — on topic
     doms = ", ".join(sorted({d.get("domain", "General") for d in docs})) or "your documents"
     return (f"🧭 **Heads up — this looks outside your uploaded knowledge** "
             f"({doms}). I couldn't find it in your documents, so the answer below "
@@ -220,3 +243,127 @@ def add_report_chart(document, docs: list) -> None:
             blocks = int(round((val / maxv) * 20))
             bar.text = "█" * max(blocks, 1)
             shade(bar, color)
+
+
+# --------------------------------------------------------------------------- #
+#  Fast, contextual follow-up suggestions (instant, no LLM round-trip needed)  #
+# --------------------------------------------------------------------------- #
+_ASK_CHALLENGE = re.compile(r"challenge|problem|issue|risk|current situation|gap|weak", re.I)
+_ASK_SOLUTION = re.compile(r"solution|propos|recommend|fix|solve|improve|address|how (to|do|can)", re.I)
+_ASK_INSIGHT = re.compile(r"insight|takeaway|finding|so what|implication|highlight", re.I)
+_ASK_SUMMARY = re.compile(r"summar|overview|objective|goal|what is (this|in)|about (this|the)|describe|explain", re.I)
+_ASK_CHART = re.compile(r"chart|graph|plot|trend|over \d+ year|growth|compare|number|metric", re.I)
+
+
+def smart_followups(last_q: str, last_a: str, docs: list, offtopic: bool = False):
+    """Return up to 3 relevant, clickable follow-up questions for the last turn.
+
+    Instant (no API call) and always non-empty, so suggestions never disappear in
+    a demo. Style matches the product spec: 'Do you need the proposed solutions?',
+    'Do you want insights on this?', plus one topical/related question.
+    """
+    q = (last_q or "").strip()
+    doms = [d.get("domain", "") for d in (docs or []) if d.get("domain")]
+    dom = next((d for d in doms if d and d != "General"), "these documents")
+
+    if offtopic:
+        return ["Summarise the uploaded documents",
+                "What are the current challenges?",
+                "What are the proposed solutions?"]
+
+    out: list = []
+    def add(s):
+        if s and s not in out and len(out) < 3:
+            out.append(s)
+
+    if _ASK_CHALLENGE.search(q):
+        add("Do you want the proposed solutions to these challenges?")
+        add("Any insights I should check on for these?")
+        add("Show me a chart of the key metrics")
+    elif _ASK_SOLUTION.search(q):
+        add("What current challenges do these solutions address?")
+        add("What insights support these recommendations?")
+        add("Summarise the objective and expected impact")
+    elif _ASK_INSIGHT.search(q):
+        add("Do you need the proposed solutions behind these insights?")
+        add("What are the current challenges here?")
+        add("Show these insights as a chart")
+    elif _ASK_SUMMARY.search(q):
+        add("Do you need the problems in these docs?")
+        add("Do you need the objectives?")
+        add("Do you need the proposed solutions to it?")
+    elif _ASK_CHART.search(q):
+        add("Do you want the proposed solutions for this trend?")
+        add("What are the key insights from this data?")
+        add("Summarise what this means for the objective")
+    else:
+        # generic but still on the product's rails — the requested phrasing
+        add("Do you need the problems in these docs?")
+        add("Do you need the objectives?")
+        add("Do you need the proposed solutions to it?")
+
+    # always leave the user a strong next step
+    add("Compare the challenges across all documents")
+    return out[:3]
+
+
+def followups_fast(client, last_q: str, last_a: str, docs: list,
+                   guard=None, offtopic: bool = False, use_llm: bool = False):
+    """Fast path for the UI: heuristic suggestions first (instant + relevant); if
+    use_llm is set and online, try to enrich with model suggestions, but never
+    block or return empty. PII-filter the results when a guard is supplied.
+    """
+    sugg = []
+    if use_llm and client is not None and hasattr(client, "get_auto_suggestions"):
+        try:
+            sugg = list(client.get_auto_suggestions((last_a or "")[:1500], last_q or "") or [])
+        except Exception:
+            sugg = []
+    if not sugg:
+        sugg = smart_followups(last_q, last_a, docs, offtopic=offtopic)
+    if guard is not None:
+        try:
+            sugg = [s for s in sugg if not guard.check_pii(s).triggered]
+        except Exception:
+            pass
+    # de-dup, keep 3
+    seen, out = set(), []
+    for s in sugg:
+        if s and s not in seen:
+            seen.add(s); out.append(s)
+    return out[:3] or smart_followups(last_q, last_a, docs, offtopic=offtopic)
+
+
+# --------------------------------------------------------------------------- #
+#  Bulletize — turn a section blob into clean point-wise bullets               #
+# --------------------------------------------------------------------------- #
+def bulletize(text, max_points: int = 8):
+    """Split an analysis section (which may be a paragraph or newline blob) into
+    clean, point-wise bullets. Handles existing '-', '*', '•', numbered lists,
+    and long paragraphs (splits on sentences)."""
+    if isinstance(text, (list, tuple)):
+        lines = [str(x) for x in text]
+    else:
+        lines = str(text or "").splitlines()
+    points = []
+    for ln in lines:
+        s = ln.strip()
+        if not s:
+            continue
+        s = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", s).strip()  # strip bullet/number
+        # split a multi-sentence blob into separate points
+        sentence_count = len(re.findall(r"[.!?](?:\s|$)", s))
+        if sentence_count >= 2 or (len(s) > 120 and "." in s):
+            for sent in re.split(r"(?<=[.!?])\s+", s):
+                sent = sent.strip().rstrip(".")
+                if len(sent) > 3:
+                    points.append(sent)
+        elif len(s) > 2:
+            points.append(s.rstrip("."))
+    # de-dup preserving order
+    seen, out = set(), []
+    for p in points:
+        k = p.lower()
+        if k not in seen:
+            seen.add(k); out.append(p)
+    return out[:max_points]
